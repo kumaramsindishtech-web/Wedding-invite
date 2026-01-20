@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="kn">
 <head>
 <meta charset="UTF-8">
 <title>Kumara Weds [Bride Name]</title>
 
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Poppins:wght@300&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Kannada:wght@500&display=swap" rel="stylesheet">
 
 <style>
 html, body {
@@ -13,9 +13,10 @@ html, body {
     height: 100%;
     background: radial-gradient(circle at top, #1a1a1a, #000);
     overflow: hidden;
-    font-family: 'Playfair Display', serif;
+    font-family: 'Noto Serif Kannada', serif;
 }
 
+/* COMMON SCENE */
 .scene {
     position: absolute;
     width: 100%;
@@ -25,7 +26,7 @@ html, body {
     align-items: center;
     flex-direction: column;
     opacity: 0;
-    transition: opacity 1.5s ease-in-out;
+    transition: opacity 1.5s ease;
     color: #f5e6c8;
     text-align: center;
 }
@@ -34,21 +35,59 @@ html, body {
     opacity: 1;
 }
 
-h1 {
-    font-size: 3rem;
-    letter-spacing: 3px;
-    margin: 10px;
+/* FLOWER SCENE */
+.flower-img {
+    width: 260px;
+    max-width: 80%;
+    opacity: 0;
+    animation: flowerIn 2.5s ease forwards;
 }
 
-h2 {
-    font-size: 2.2rem;
-    margin: 10px;
+@keyframes flowerIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to   { opacity: 1; transform: scale(1); }
 }
 
-p {
-    font-family: 'Poppins', sans-serif;
-    font-size: 1.3rem;
-    letter-spacing: 1px;
+.welcome-text {
+    margin-top: 20px;
+    font-size: 1.8rem;
+    opacity: 0;
+    animation: textFade 2s ease forwards;
+    animation-delay: 1.5s;
+}
+
+/* COUPLE IMAGE */
+.couple-img {
+    width: 260px;
+    max-width: 80%;
+    opacity: 0;
+    filter: blur(20px);
+    transform: scale(0.6);
+    animation: coupleReveal 3s ease forwards;
+}
+
+@keyframes coupleReveal {
+    from {
+        opacity: 0;
+        filter: blur(20px);
+        transform: scale(0.6);
+    }
+    to {
+        opacity: 1;
+        filter: blur(0);
+        transform: scale(1);
+    }
+}
+
+.name-delay {
+    opacity: 0;
+    animation: textFade 2s ease forwards;
+    animation-delay: 2.5s;
+}
+
+@keyframes textFade {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 .gold-line {
@@ -57,85 +96,35 @@ p {
     background: linear-gradient(90deg, transparent, gold, transparent);
     margin: 20px 0;
 }
-
-button {
-    margin-top: 30px;
-    padding: 14px 35px;
-    border: none;
-    border-radius: 40px;
-    background: linear-gradient(135deg, #d4af37, #f7e27a);
-    color: #000;
-    font-size: 1rem;
-    cursor: pointer;
-}
-
-button:hover {
-    transform: scale(1.05);
-}
-
-.fade-up {
-    animation: fadeUp 2s ease forwards;
-}
-
-@keyframes fadeUp {
-    from {
-        opacity: 0;
-        transform: translateY(40px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
 </style>
 </head>
 
 <body>
 
-<!-- Scene 1 -->
+<!-- SCENE 1 -->
 <div id="scene1" class="scene show">
-    <h2 class="fade-up">ನಮ್ಮ ಕುಟುಂಬದ ಹಿರಿಯರ ಆಶೀರ್ವಾದಗಳೊಂದಿಗೆ</h2>
+    <img src="pngtree-flowers-png-image_7506581.png" class="flower-img">
+    <div class="welcome-text">
+        ನಮ್ಮ ಕುಟುಂಬದ ಹಿರಿಯರ ಆಶೀರ್ವಾದಗಳೊಂದಿಗೆ
+    </div>
 </div>
 
-<!-- Scene 2 -->
+<!-- SCENE 2 -->
 <div id="scene2" class="scene">
-    <h1 class="fade-up">Kumara M S</h1>
-    <div class="gold-line"></div>
-    <h1 class="fade-up">&</h1>
-    <div class="gold-line"></div>
-    <h1 class="fade-up">[Bride Name]</h1>
-    <p class="fade-up">Warmly welcome you</p>
-</div>
-
-<!-- Scene 3 -->
-<div id="scene3" class="scene">
-    <h2 class="fade-up">💍 Wedding Ceremony</h2>
-    <div class="gold-line"></div>
-    <p class="fade-up">12th May 2026 | 10:30 AM</p>
-    <p class="fade-up">Sri Lakshmi Convention Hall, Mysuru</p>
-</div>
-
-<!-- Scene 4 -->
-<div id="scene4" class="scene">
-    <h2 class="fade-up">Your presence will make our beginning complete</h2>
-    <button onclick="window.open('https://maps.google.com')">📍 Open Map</button>
+    <img src="pngwing.com (1).png" class="couple-img">
+    <h1 class="name-delay">ಕುಮಾರ ಎಂ ಎಸ್</h1>
+    <div class="gold-line name-delay"></div>
+    <h1 class="name-delay">[ವಧುವಿನ ಹೆಸರು]</h1>
 </div>
 
 <script>
-const scenes = [
-    document.getElementById("scene1"),
-    document.getElementById("scene2"),
-    document.getElementById("scene3"),
-    document.getElementById("scene4")
-];
+const scene1 = document.getElementById("scene1");
+const scene2 = document.getElementById("scene2");
 
-let current = 0;
-
-setInterval(() => {
-    scenes[current].classList.remove("show");
-    current = (current + 1) % scenes.length;
-    scenes[current].classList.add("show");
-}, 3000);
+setTimeout(() => {
+    scene1.classList.remove("show");
+    scene2.classList.add("show");
+}, 5000);
 </script>
 
 </body>
