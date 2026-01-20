@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kumara Weds [Bride Name]</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600&family=Poppins:wght@300&display=swap" rel="stylesheet">
+
+<style>
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at top, #1a1a1a, #000);
+    overflow: hidden;
+    font-family: 'Playfair Display', serif;
+}
+
+.scene {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    opacity: 0;
+    transition: opacity 1.5s ease-in-out;
+    color: #f5e6c8;
+    text-align: center;
+}
+
+.show {
+    opacity: 1;
+}
+
+h1 {
+    font-size: 3rem;
+    letter-spacing: 3px;
+    margin: 10px;
+}
+
+h2 {
+    font-size: 2.2rem;
+    margin: 10px;
+}
+
+p {
+    font-family: 'Poppins', sans-serif;
+    font-size: 1.3rem;
+    letter-spacing: 1px;
+}
+
+.gold-line {
+    width: 200px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, gold, transparent);
+    margin: 20px 0;
+}
+
+button {
+    margin-top: 30px;
+    padding: 14px 35px;
+    border: none;
+    border-radius: 40px;
+    background: linear-gradient(135deg, #d4af37, #f7e27a);
+    color: #000;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+button:hover {
+    transform: scale(1.05);
+}
+
+.fade-up {
+    animation: fadeUp 2s ease forwards;
+}
+
+@keyframes fadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+</style>
+</head>
+
+<body>
+
+<!-- Scene 1 -->
+<div id="scene1" class="scene show">
+    <h2 class="fade-up">With the blessings of our families</h2>
+</div>
+
+<!-- Scene 2 -->
+<div id="scene2" class="scene">
+    <h1 class="fade-up">Kumara M S</h1>
+    <div class="gold-line"></div>
+    <h1 class="fade-up">&</h1>
+    <div class="gold-line"></div>
+    <h1 class="fade-up">[Bride Name]</h1>
+    <p class="fade-up">Warmly welcome you</p>
+</div>
+
+<!-- Scene 3 -->
+<div id="scene3" class="scene">
+    <h2 class="fade-up">💍 Wedding Ceremony</h2>
+    <div class="gold-line"></div>
+    <p class="fade-up">12th May 2026 | 10:30 AM</p>
+    <p class="fade-up">Sri Lakshmi Convention Hall, Mysuru</p>
+</div>
+
+<!-- Scene 4 -->
+<div id="scene4" class="scene">
+    <h2 class="fade-up">Your presence will make our beginning complete</h2>
+    <button onclick="window.open('https://maps.google.com')">📍 Open Map</button>
+</div>
+
+<script>
+const scenes = [
+    document.getElementById("scene1"),
+    document.getElementById("scene2"),
+    document.getElementById("scene3"),
+    document.getElementById("scene4")
+];
+
+let current = 0;
+
+setInterval(() => {
+    scenes[current].classList.remove("show");
+    current = (current + 1) % scenes.length;
+    scenes[current].classList.add("show");
+}, 3000);
+</script>
+
+</body>
+</html>
