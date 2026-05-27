@@ -1,0 +1,14 @@
+{
+    "name": "SindishTech.WaterTankSimulator.Runtime",
+    "rootNamespace": "SindishTech.WaterTankSimulator",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

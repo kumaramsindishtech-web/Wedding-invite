@@ -1,0 +1,28 @@
+{
+  "name": "com.sindishtech.watertanksimulator",
+  "version": "1.0.0",
+  "displayName": "Water Tank Simulator",
+  "description": "A realistic water tank simulation addon with inlet/outlet valves, temperature control, pressure simulation, and custom Editor UI for visualization and training purposes.",
+  "unity": "2021.3",
+  "unityRelease": "0f1",
+  "documentationUrl": "",
+  "changelogUrl": "",
+  "licensesUrl": "",
+  "keywords": [
+    "water",
+    "tank",
+    "simulation",
+    "temperature",
+    "pressure",
+    "valve",
+    "flow",
+    "visualization"
+  ],
+  "author": {
+    "name": "SindishTech",
+    "email": "",
+    "url": ""
+  },
+  "type": "tool",
+  "dependencies": {}
+}
