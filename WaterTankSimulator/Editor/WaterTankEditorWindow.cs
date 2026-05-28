@@ -110,9 +110,6 @@ namespace SindishTech.WaterTankSimulator.Editor
             if (simulation == null)
                 simulation = FindObjectOfType<WaterTankSimulation>();
 
-            // Background
-            EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), BgDark);
-
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
             GUILayout.Space(8);
 
@@ -385,38 +382,27 @@ namespace SindishTech.WaterTankSimulator.Editor
 
         private void DrawPanel(string title, System.Action content)
         {
-            Rect panelRect = EditorGUILayout.BeginVertical();
+            // Reserve space first to measure, then draw
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             
-            // Panel background
-            Rect bgRect = new Rect(8, panelRect.y, position.width - 16, 0);
+            GUILayout.Space(2);
             
-            GUILayout.Space(4);
-            
-            // Title
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Space(12);
-            EditorGUILayout.LabelField(title, titleStyle);
-            EditorGUILayout.EndHorizontal();
+            // Title with cyan color
+            var titleLabelStyle = new GUIStyle(EditorStyles.boldLabel)
+            {
+                fontSize = 11,
+                normal = { textColor = Cyan }
+            };
+            EditorGUILayout.LabelField(title, titleLabelStyle);
             
             GUILayout.Space(4);
 
             // Content
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Space(12);
-            EditorGUILayout.BeginVertical();
             content?.Invoke();
-            EditorGUILayout.EndVertical();
-            GUILayout.Space(12);
-            EditorGUILayout.EndHorizontal();
 
-            GUILayout.Space(8);
+            GUILayout.Space(4);
             
             EditorGUILayout.EndVertical();
-
-            // Draw background after measuring
-            bgRect.height = GUILayoutUtility.GetLastRect().yMax - bgRect.y + 4;
-            EditorGUI.DrawRect(bgRect, BgPanel);
-            DrawBorder(bgRect, BorderColor, 1);
         }
 
         private bool DrawButton(string text, Color color, float height, float width = 0)
@@ -446,48 +432,44 @@ namespace SindishTech.WaterTankSimulator.Editor
         private void DrawProgressBar(string label, float value, Color fillColor, float height)
         {
             Rect rect = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.Height(height));
-            rect.x += 4;
-            rect.width -= 8;
 
             // Background
-            EditorGUI.DrawRect(rect, BgLight);
+            EditorGUI.DrawRect(rect, new Color(0.15f, 0.15f, 0.18f, 1f));
 
             // Fill
-            Rect fillRect = new Rect(rect.x + 2, rect.y + 2, (rect.width - 4) * Mathf.Clamp01(value), rect.height - 4);
+            Rect fillRect = new Rect(rect.x + 1, rect.y + 1, (rect.width - 2) * Mathf.Clamp01(value), rect.height - 2);
             EditorGUI.DrawRect(fillRect, fillColor);
 
             // Border
-            DrawBorder(rect, BorderColor, 1);
+            DrawBorder(rect, new Color(0.3f, 0.3f, 0.35f, 1f), 1);
 
             // Label
-            var labelStyle = new GUIStyle(EditorStyles.boldLabel)
+            var barLabelStyle = new GUIStyle(EditorStyles.boldLabel)
             {
                 fontSize = 10,
                 alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = TextWhite }
+                normal = { textColor = Color.white }
             };
-            EditorGUI.DropShadowLabel(rect, label, labelStyle);
+            EditorGUI.LabelField(rect, label, barLabelStyle);
         }
 
         private void DrawAlertBox(string message, Color color)
         {
-            Rect rect = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.Height(22));
-            rect.x += 4;
-            rect.width -= 8;
+            Rect rect = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.Height(24));
 
             // Background
-            Color bgColor = new Color(color.r, color.g, color.b, 0.15f);
+            Color bgColor = new Color(color.r, color.g, color.b, 0.2f);
             EditorGUI.DrawRect(rect, bgColor);
             DrawBorder(rect, color, 1);
 
             // Text
-            var style = new GUIStyle(EditorStyles.boldLabel)
+            var alertStyle = new GUIStyle(EditorStyles.boldLabel)
             {
                 fontSize = 10,
                 alignment = TextAnchor.MiddleCenter,
                 normal = { textColor = color }
             };
-            EditorGUI.LabelField(rect, message, style);
+            EditorGUI.LabelField(rect, message, alertStyle);
         }
 
         private void DrawBorder(Rect rect, Color color, float thickness)
