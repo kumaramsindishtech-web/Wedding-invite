@@ -3,13 +3,12 @@ using UnityEngine;
 namespace SindishTech.WaterTankSimulator
 {
     /// <summary>
-    /// Controls the water tank visualization with 2 materials:
-    /// - Material 0 (Metal): Always visible (tank shell)
-    /// - Material 1 (Water): Clips based on water level Y position
+    /// Controls the water tank fill visualization.
+    /// Uses a simple 0-1 fill amount that the shader uses with UV coordinates.
     /// 
-    /// The water material uses a shader that clips pixels above the water level.
-    /// When water level is 0%, all water pixels are clipped (invisible).
-    /// As water fills, more pixels become visible from bottom to top.
+    /// Setup:
+    /// - Material 0 (Metal): Your tank shell material
+    /// - Material 1 (Water): Use SindishTech/WaterFill shader
     /// </summary>
     [ExecuteInEditMode]
     [AddComponentMenu("SindishTech/Water Level Controller")]
@@ -19,30 +18,20 @@ namespace SindishTech.WaterTankSimulator
         [Tooltip("Reference to the WaterTankSimulation component")]
         public WaterTankSimulation simulation;
 
-        [Tooltip("The renderer with the tank materials (usually MeshRenderer on Tank)")]
+        [Tooltip("The renderer with the tank materials")]
         public Renderer tankRenderer;
 
         [Header("Material Index")]
         [Tooltip("Index of the Water material in the renderer's material array")]
         public int waterMaterialIndex = 1;
 
-        [Header("Tank Dimensions (World Space Y)")]
-        [Tooltip("Y position of the tank BOTTOM in world space - water starts filling from here")]
-        public float tankBottomY = 0f;
-
-        [Tooltip("Y position of the tank TOP in world space - water fills up to here at 100%")]
-        public float tankTopY = 2f;
-
-        [Header("Debug Info (Read Only)")]
-        [SerializeField] private float currentWaterLevelY = 0f;
-        [SerializeField] private float currentFillPercentage = 0f;
+        [Header("Debug Info")]
+        [SerializeField] private float currentFillAmount = 0f;
         [SerializeField] private bool materialFound = false;
 
-        // Shader property IDs (must match shader exactly)
-        private static readonly int WaterLevelYID = Shader.PropertyToID("_WaterLevelY");
+        // Shader property IDs
+        private static readonly int FillAmountID = Shader.PropertyToID("_FillAmount");
         private static readonly int TemperatureID = Shader.PropertyToID("_Temperature");
-        private static readonly int TankBottomYID = Shader.PropertyToID("_TankBottomY");
-        private static readonly int TankTopYID = Shader.PropertyToID("_TankTopY");
 
         private Material waterMaterial;
 
@@ -53,10 +42,10 @@ namespace SindishTech.WaterTankSimulator
 
             GetWaterMaterial();
             
-            // Initialize water level to bottom (0% fill)
+            // Initialize to empty
             if (waterMaterial != null)
             {
-                waterMaterial.SetFloat(WaterLevelYID, tankBottomY - 1f); // Start below tank
+                waterMaterial.SetFloat(FillAmountID, 0f);
             }
         }
 
@@ -65,6 +54,7 @@ namespace SindishTech.WaterTankSimulator
             if (tankRenderer == null)
             {
                 materialFound = false;
+                Debug.LogWarning("[WaterLevelController] No Tank Renderer assigned!");
                 return;
             }
 
@@ -77,13 +67,13 @@ namespace SindishTech.WaterTankSimulator
                 
                 if (materialFound)
                 {
-                    Debug.Log($"[WaterLevelController] Water material found: {waterMaterial.name}, Shader: {waterMaterial.shader.name}");
+                    Debug.Log($"[WaterLevelController] Water material found: {waterMaterial.name}");
                 }
             }
             else
             {
                 materialFound = false;
-                Debug.LogWarning($"[WaterLevelController] Water material not found at index {waterMaterialIndex}. Material count: {mats?.Length ?? 0}");
+                Debug.LogWarning($"[WaterLevelController] No material at index {waterMaterialIndex}");
             }
         }
 
@@ -95,97 +85,52 @@ namespace SindishTech.WaterTankSimulator
                 if (waterMaterial == null) return;
             }
 
-            if (simulation == null)
-            {
-                Debug.LogWarning("[WaterLevelController] No simulation assigned!");
-                return;
-            }
+            if (simulation == null) return;
 
             UpdateWaterShader();
         }
 
         private void UpdateWaterShader()
         {
-            // Get fill percentage from simulation (0-100)
-            currentFillPercentage = simulation.WaterLevelPercentage;
+            // Get fill percentage from simulation (0-100) and convert to 0-1
+            currentFillAmount = simulation.WaterLevelPercentage / 100f;
             
-            // Convert to 0-1 range
-            float fillNormalized = currentFillPercentage / 100f;
-            
-            // Calculate water surface Y in world space
-            float tankHeight = tankTopY - tankBottomY;
-            currentWaterLevelY = tankBottomY + (fillNormalized * tankHeight);
-
             // Send to shader
-            waterMaterial.SetFloat(WaterLevelYID, currentWaterLevelY);
+            waterMaterial.SetFloat(FillAmountID, currentFillAmount);
             waterMaterial.SetFloat(TemperatureID, simulation.CurrentTemperature);
-            waterMaterial.SetFloat(TankBottomYID, tankBottomY);
-            waterMaterial.SetFloat(TankTopYID, tankTopY);
-        }
-
-        /// <summary>
-        /// Auto-detect tank dimensions from the renderer bounds.
-        /// Call this after positioning your tank in the scene.
-        /// </summary>
-        [ContextMenu("Auto Detect Tank Dimensions")]
-        public void AutoDetectDimensions()
-        {
-            if (tankRenderer == null)
-            {
-                tankRenderer = GetComponent<Renderer>();
-                if (tankRenderer == null)
-                {
-                    Debug.LogError("[WaterLevelController] No Renderer found!");
-                    return;
-                }
-            }
-
-            Bounds bounds = tankRenderer.bounds;
-            tankBottomY = bounds.min.y;
-            tankTopY = bounds.max.y;
-
-            Debug.Log($"[WaterLevelController] Tank dimensions auto-detected:\n" +
-                      $"  Bottom Y: {tankBottomY}\n" +
-                      $"  Top Y: {tankTopY}\n" +
-                      $"  Height: {tankTopY - tankBottomY}");
             
-            // Also update shader immediately
-            if (waterMaterial != null)
+            // Debug log every 60 frames
+            if (Time.frameCount % 60 == 0)
             {
-                waterMaterial.SetFloat(TankBottomYID, tankBottomY);
-                waterMaterial.SetFloat(TankTopYID, tankTopY);
+                Debug.Log($"[WaterLevelController] Fill: {currentFillAmount:F2} ({simulation.WaterLevelPercentage:F1}%), Temp: {simulation.CurrentTemperature:F1}°C");
             }
         }
 
         /// <summary>
-        /// Manually set water level for testing (bypasses simulation)
+        /// Manually set fill level for testing (0-1)
         /// </summary>
-        public void SetWaterLevelDirect(float percentage)
+        public void SetFillDirect(float fill01)
         {
             if (waterMaterial == null) return;
             
-            float fillNormalized = Mathf.Clamp01(percentage / 100f);
-            float tankHeight = tankTopY - tankBottomY;
-            float waterY = tankBottomY + (fillNormalized * tankHeight);
-            
-            waterMaterial.SetFloat(WaterLevelYID, waterY);
-            currentWaterLevelY = waterY;
-            currentFillPercentage = percentage;
+            currentFillAmount = Mathf.Clamp01(fill01);
+            waterMaterial.SetFloat(FillAmountID, currentFillAmount);
+            Debug.Log($"[WaterLevelController] Direct fill set to: {currentFillAmount:F2}");
         }
 
         [ContextMenu("Test: Fill 0%")]
-        public void TestFill0() => SetWaterLevelDirect(0);
+        public void TestFill0() => SetFillDirect(0f);
 
         [ContextMenu("Test: Fill 25%")]
-        public void TestFill25() => SetWaterLevelDirect(25);
+        public void TestFill25() => SetFillDirect(0.25f);
 
         [ContextMenu("Test: Fill 50%")]
-        public void TestFill50() => SetWaterLevelDirect(50);
+        public void TestFill50() => SetFillDirect(0.5f);
 
         [ContextMenu("Test: Fill 75%")]
-        public void TestFill75() => SetWaterLevelDirect(75);
+        public void TestFill75() => SetFillDirect(0.75f);
 
         [ContextMenu("Test: Fill 100%")]
-        public void TestFill100() => SetWaterLevelDirect(100);
+        public void TestFill100() => SetFillDirect(1f);
     }
 }

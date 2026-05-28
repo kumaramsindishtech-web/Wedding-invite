@@ -8,9 +8,7 @@ Shader "SindishTech/WaterFill"
         _SurfaceColor ("Surface Highlight", Color) = (0.3, 0.7, 1.0, 1)
         
         [Header(Water Level)]
-        _WaterLevelY ("Water Level Y (World)", Float) = 0
-        _TankBottomY ("Tank Bottom Y (World)", Float) = 0
-        _TankTopY ("Tank Top Y (World)", Float) = 2
+        _FillAmount ("Fill Amount (0-1)", Range(0, 1)) = 0
         
         [Header(Temperature)]
         _Temperature ("Temperature (0-340)", Range(0, 340)) = 25
@@ -57,19 +55,18 @@ Shader "SindishTech/WaterFill"
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
-                float3 positionWS : TEXCOORD0;
-                float3 normalWS : TEXCOORD1;
-                float2 uv : TEXCOORD2;
-                float fogCoord : TEXCOORD3;
+                float3 positionOS : TEXCOORD0;
+                float3 positionWS : TEXCOORD1;
+                float3 normalWS : TEXCOORD2;
+                float2 uv : TEXCOORD3;
+                float fogCoord : TEXCOORD4;
             };
             
             CBUFFER_START(UnityPerMaterial)
                 half4 _WaterColor;
                 half4 _DeepWaterColor;
                 half4 _SurfaceColor;
-                float _WaterLevelY;
-                float _TankBottomY;
-                float _TankTopY;
+                float _FillAmount;
                 float _Temperature;
                 half4 _HotColor;
                 float _FresnelPower;
@@ -86,6 +83,7 @@ Shader "SindishTech/WaterFill"
                 VertexNormalInputs normInputs = GetVertexNormalInputs(input.normalOS);
                 
                 output.positionCS = posInputs.positionCS;
+                output.positionOS = input.positionOS.xyz; // Keep object space position
                 output.positionWS = posInputs.positionWS;
                 output.normalWS = normInputs.normalWS;
                 output.uv = input.uv;
@@ -96,28 +94,31 @@ Shader "SindishTech/WaterFill"
             
             half4 frag(Varyings input) : SV_Target
             {
-                // CLIP - Discard pixels ABOVE water level (this creates the fill effect)
-                float waterY = _WaterLevelY;
+                // Use UV.y for fill level (UV typically goes 0-1 from bottom to top)
+                // OR use object space Y normalized
+                
+                // Method: Use UV.y (most reliable for imported meshes)
+                float verticalPos = input.uv.y;
                 
                 // Add small wave at surface
                 float wave = sin(input.positionWS.x * 8 + _Time.y * _WaveSpeed) * 
                              cos(input.positionWS.z * 6 + _Time.y * _WaveSpeed * 0.7) * _WaveStrength;
-                waterY += wave;
                 
-                // Clip pixels above water level
-                clip(waterY - input.positionWS.y);
+                float fillLevel = _FillAmount + wave;
                 
-                // Calculate depth from bottom (0 at bottom, 1 at surface)
-                float tankHeight = _TankTopY - _TankBottomY;
-                float depthFromBottom = (input.positionWS.y - _TankBottomY) / tankHeight;
-                float depthFromSurface = (_WaterLevelY - input.positionWS.y) / tankHeight;
+                // CLIP - Discard pixels ABOVE fill level
+                // If UV.y > fillAmount, discard (clip negative values)
+                clip(fillLevel - verticalPos);
+                
+                // Calculate depth for coloring (0 at bottom, 1 at fill level)
+                float depth = verticalPos / max(_FillAmount, 0.001);
                 
                 // Base water color - deeper = darker
-                half3 waterColor = lerp(_DeepWaterColor.rgb, _WaterColor.rgb, saturate(depthFromBottom));
+                half3 waterColor = lerp(_DeepWaterColor.rgb, _WaterColor.rgb, saturate(depth));
                 
-                // Surface highlight (near water level)
-                float surfaceProximity = 1.0 - saturate(abs(input.positionWS.y - _WaterLevelY) / 0.1);
-                waterColor = lerp(waterColor, _SurfaceColor.rgb, surfaceProximity * 0.4);
+                // Surface highlight (near fill level)
+                float surfaceProximity = 1.0 - saturate(abs(verticalPos - _FillAmount) / 0.05);
+                waterColor = lerp(waterColor, _SurfaceColor.rgb, surfaceProximity * 0.5);
                 
                 // Temperature effect
                 float tempFactor = saturate(_Temperature / 340.0);
@@ -175,15 +176,16 @@ Shader "SindishTech/WaterFill"
             {
                 float4 positionOS : POSITION;
                 float3 normalOS : NORMAL;
+                float2 uv : TEXCOORD0;
             };
             
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
-                float3 positionWS : TEXCOORD0;
+                float2 uv : TEXCOORD0;
             };
             
-            float _WaterLevelY;
+            float _FillAmount;
             float3 _LightDirection;
             
             float4 GetShadowPositionHClip(Attributes input)
@@ -204,15 +206,14 @@ Shader "SindishTech/WaterFill"
             Varyings ShadowVert(Attributes input)
             {
                 Varyings output;
-                output.positionWS = TransformObjectToWorld(input.positionOS.xyz);
                 output.positionCS = GetShadowPositionHClip(input);
+                output.uv = input.uv;
                 return output;
             }
             
             half4 ShadowFrag(Varyings input) : SV_Target
             {
-                // Clip shadow above water level too
-                clip(_WaterLevelY - input.positionWS.y);
+                clip(_FillAmount - input.uv.y);
                 return 0;
             }
             ENDHLSL
@@ -237,27 +238,28 @@ Shader "SindishTech/WaterFill"
             struct Attributes
             {
                 float4 positionOS : POSITION;
+                float2 uv : TEXCOORD0;
             };
             
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
-                float3 positionWS : TEXCOORD0;
+                float2 uv : TEXCOORD0;
             };
             
-            float _WaterLevelY;
+            float _FillAmount;
             
             Varyings DepthVert(Attributes input)
             {
                 Varyings output;
-                output.positionWS = TransformObjectToWorld(input.positionOS.xyz);
                 output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                output.uv = input.uv;
                 return output;
             }
             
             half4 DepthFrag(Varyings input) : SV_Target
             {
-                clip(_WaterLevelY - input.positionWS.y);
+                clip(_FillAmount - input.uv.y);
                 return 0;
             }
             ENDHLSL
