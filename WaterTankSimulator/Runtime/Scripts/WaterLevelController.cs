@@ -3,13 +3,11 @@ using UnityEngine;
 namespace SindishTech.WaterTankSimulator
 {
     /// <summary>
-    /// Controls the water shader material properties based on simulation state.
-    /// Attach this to the Tank mesh.
+    /// Controls the water tank visualization with 2 materials:
+    /// - Material 0 (Metal): Shown in Editor mode
+    /// - Material 1 (Water): Shown in Play mode, fills based on water level
     /// 
-    /// BEHAVIOR:
-    /// - In Editor Mode (not playing): Shows metallic tank material
-    /// - In Play Mode with Simulation Running: Shows water filling shader
-    /// - Water level and temperature are driven by the simulation
+    /// The water material uses a shader that clips pixels above the water level.
     /// </summary>
     [ExecuteInEditMode]
     [AddComponentMenu("SindishTech/Water Level Controller")]
@@ -19,118 +17,114 @@ namespace SindishTech.WaterTankSimulator
         [Tooltip("Reference to the WaterTankSimulation component")]
         public WaterTankSimulation simulation;
 
-        [Tooltip("The renderer with the water material")]
+        [Tooltip("The renderer with the tank materials")]
         public Renderer tankRenderer;
 
-        [Header("Tank Dimensions")]
-        [Tooltip("Height of the tank in world units")]
-        public float tankHeight = 2f;
+        [Header("Material Indices")]
+        [Tooltip("Index of the Metal material (shown in Editor)")]
+        public int metalMaterialIndex = 0;
 
+        [Tooltip("Index of the Water material (shown in Play mode)")]
+        public int waterMaterialIndex = 1;
+
+        [Header("Tank Dimensions (World Space)")]
         [Tooltip("Y position of the tank bottom in world space")]
-        public float tankBottomY = -1f;
+        public float tankBottomY = 0f;
 
-        [Header("Material Settings")]
-        [Tooltip("Material instance index (if multiple materials on renderer)")]
-        public int materialIndex = 0;
+        [Tooltip("Y position of the tank top in world space")]
+        public float tankTopY = 2f;
 
-        [Header("Mode Control")]
-        [Tooltip("When true, simulation mode runs even in Editor (for testing)")]
-        public bool forceSimulationModeInEditor = false;
+        [Header("Debug")]
+        [SerializeField] private float currentWaterWorldY = 0f;
+        [SerializeField] private bool isPlayMode = false;
 
-        private Material tankMaterial;
-        private static readonly int WaterLevelID = Shader.PropertyToID("_WaterLevel");
-        private static readonly int TankHeightID = Shader.PropertyToID("_TankHeight");
-        private static readonly int TankBottomYID = Shader.PropertyToID("_TankBottomY");
+        // Shader property IDs
+        private static readonly int WaterLevelYID = Shader.PropertyToID("_WaterLevelY");
         private static readonly int TemperatureID = Shader.PropertyToID("_Temperature");
-        private static readonly int SimulationModeID = Shader.PropertyToID("_SimulationMode");
+        private static readonly int TankBottomYID = Shader.PropertyToID("_TankBottomY");
+        private static readonly int TankTopYID = Shader.PropertyToID("_TankTopY");
+
+        private Material waterMaterial;
+        private Material[] originalMaterials;
+        private bool materialsInitialized = false;
 
         private void OnEnable()
         {
             if (tankRenderer == null)
                 tankRenderer = GetComponent<Renderer>();
 
-            UpdateMaterialReference();
-
-            if (simulation != null)
+            if (tankRenderer != null)
             {
-                simulation.OnWaterLevelChanged += OnWaterLevelChanged;
-                simulation.OnTemperatureChanged += OnTemperatureChanged;
+                originalMaterials = tankRenderer.sharedMaterials;
             }
+
+            InitializeMaterials();
         }
 
         private void OnDisable()
         {
-            if (simulation != null)
+            // Restore original materials when disabled
+            RestoreEditorMaterials();
+        }
+
+        private void InitializeMaterials()
+        {
+            if (tankRenderer == null || tankRenderer.sharedMaterials.Length <= waterMaterialIndex)
+                return;
+
+            if (Application.isPlaying)
             {
-                simulation.OnWaterLevelChanged -= OnWaterLevelChanged;
-                simulation.OnTemperatureChanged -= OnTemperatureChanged;
+                // Get instance of water material for runtime modification
+                Material[] mats = tankRenderer.materials;
+                if (mats.Length > waterMaterialIndex)
+                {
+                    waterMaterial = mats[waterMaterialIndex];
+                }
             }
+            else
+            {
+                waterMaterial = tankRenderer.sharedMaterials[waterMaterialIndex];
+            }
+
+            materialsInitialized = true;
         }
 
         private void Update()
         {
-            if (tankMaterial == null)
-            {
-                UpdateMaterialReference();
-                if (tankMaterial == null) return;
-            }
+            isPlayMode = Application.isPlaying;
 
-            // Determine simulation mode
-            // Mode 0 = Metallic (editor mode, no water)
-            // Mode 1 = Water simulation active
-            bool simulationActive = false;
-            
-            if (Application.isPlaying)
+            if (!materialsInitialized)
             {
-                // In Play mode: show water when simulation is running
-                simulationActive = simulation != null && simulation.IsSimulationRunning;
+                InitializeMaterials();
             }
-            else
-            {
-                // In Editor mode: show metallic unless forced
-                simulationActive = forceSimulationModeInEditor && simulation != null && simulation.IsSimulationRunning;
-            }
-
-            tankMaterial.SetFloat(SimulationModeID, simulationActive ? 1f : 0f);
 
             if (simulation == null) return;
 
-            // Update water level
-            float level = simulation.WaterLevelPercentage / 100f;
-            tankMaterial.SetFloat(WaterLevelID, level);
-            tankMaterial.SetFloat(TankHeightID, tankHeight);
-            tankMaterial.SetFloat(TankBottomYID, tankBottomY);
-            tankMaterial.SetFloat(TemperatureID, simulation.CurrentTemperature);
+            UpdateWaterLevel();
         }
 
-        private void UpdateMaterialReference()
+        private void UpdateWaterLevel()
         {
-            if (tankRenderer == null) return;
+            if (waterMaterial == null) return;
 
-            // Always use material instance in play mode, shared in editor
-            if (Application.isPlaying)
+            // Calculate water Y position in world space based on fill percentage
+            float fillPercentage = simulation.WaterLevelPercentage / 100f;
+            float tankHeight = tankTopY - tankBottomY;
+            currentWaterWorldY = tankBottomY + (fillPercentage * tankHeight);
+
+            // Update shader properties
+            waterMaterial.SetFloat(WaterLevelYID, currentWaterWorldY);
+            waterMaterial.SetFloat(TemperatureID, simulation.CurrentTemperature);
+            waterMaterial.SetFloat(TankBottomYID, tankBottomY);
+            waterMaterial.SetFloat(TankTopYID, tankTopY);
+        }
+
+        private void RestoreEditorMaterials()
+        {
+            if (!Application.isPlaying && tankRenderer != null && originalMaterials != null)
             {
-                if (tankRenderer.materials.Length > materialIndex)
-                    tankMaterial = tankRenderer.materials[materialIndex];
+                tankRenderer.sharedMaterials = originalMaterials;
             }
-            else
-            {
-                if (tankRenderer.sharedMaterials.Length > materialIndex)
-                    tankMaterial = tankRenderer.sharedMaterials[materialIndex];
-            }
-        }
-
-        private void OnWaterLevelChanged(float level)
-        {
-            if (tankMaterial == null) return;
-            float normalizedLevel = level / simulation.tankCapacity;
-            tankMaterial.SetFloat(WaterLevelID, normalizedLevel);
-        }
-
-        private void OnTemperatureChanged(float temperature)
-        {
-            if (tankMaterial == null) return;
-            tankMaterial.SetFloat(TemperatureID, temperature);
         }
 
         /// <summary>
@@ -139,23 +133,47 @@ namespace SindishTech.WaterTankSimulator
         [ContextMenu("Auto Detect Tank Dimensions")]
         public void AutoDetectDimensions()
         {
-            if (tankRenderer == null) return;
+            if (tankRenderer == null)
+            {
+                Debug.LogWarning("No renderer assigned!");
+                return;
+            }
 
             Bounds bounds = tankRenderer.bounds;
-            tankHeight = bounds.size.y;
             tankBottomY = bounds.min.y;
-            
-            Debug.Log($"Tank dimensions detected: Height = {tankHeight}, Bottom Y = {tankBottomY}");
+            tankTopY = bounds.max.y;
+
+            Debug.Log($"Tank dimensions detected: Bottom Y = {tankBottomY}, Top Y = {tankTopY}, Height = {tankTopY - tankBottomY}");
         }
 
         /// <summary>
-        /// Force refresh material reference.
+        /// Test water fill at specific percentage.
         /// </summary>
-        [ContextMenu("Refresh Material")]
-        public void RefreshMaterial()
+        [ContextMenu("Test Fill 50%")]
+        public void TestFill50()
         {
-            tankMaterial = null;
-            UpdateMaterialReference();
+            if (simulation != null)
+            {
+                simulation.SetWaterLevel(simulation.tankCapacity * 0.5f);
+            }
+        }
+
+        [ContextMenu("Test Fill 100%")]
+        public void TestFill100()
+        {
+            if (simulation != null)
+            {
+                simulation.SetWaterLevel(simulation.tankCapacity);
+            }
+        }
+
+        [ContextMenu("Test Fill 0%")]
+        public void TestFill0()
+        {
+            if (simulation != null)
+            {
+                simulation.SetWaterLevel(0);
+            }
         }
     }
 }
