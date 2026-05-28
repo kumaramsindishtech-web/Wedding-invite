@@ -3,8 +3,8 @@ Shader "SindishTech/WaterTankFill"
     Properties
     {
         // Tank base material (metallic look in editor)
-        _MainTex ("Main Texture", 2D) = "white" {}
-        _MetallicColor ("Metallic Color", Color) = (0.7, 0.7, 0.75, 1)
+        _BaseMap ("Base Map", 2D) = "white" {}
+        _BaseColor ("Base Color", Color) = (0.7, 0.7, 0.75, 1)
         _Metallic ("Metallic", Range(0, 1)) = 0.8
         _Smoothness ("Smoothness", Range(0, 1)) = 0.6
         
@@ -22,16 +22,8 @@ Shader "SindishTech/WaterTankFill"
         _Temperature ("Temperature (0-340)", Range(0, 340)) = 25
         _HeatColor ("Heat Tint Color", Color) = (1, 0.3, 0.1, 1)
         
-        // Water surface animation
-        _WaveSpeed ("Wave Speed", Range(0, 5)) = 1.0
-        _WaveAmplitude ("Wave Amplitude", Range(0, 0.05)) = 0.01
-        _WaveFrequency ("Wave Frequency", Range(0, 20)) = 8.0
-        
-        // Fresnel for water
-        _FresnelPower ("Fresnel Power", Range(1, 10)) = 3.0
-        
-        // Mode control (0 = show metallic, 1 = show water simulation)
-        _SimulationMode ("Simulation Mode (0=Metallic, 1=Water)", Range(0, 1)) = 0
+        // Mode control
+        _SimulationMode ("Simulation Mode", Range(0, 1)) = 0
     }
     
     SubShader
@@ -39,125 +31,204 @@ Shader "SindishTech/WaterTankFill"
         Tags 
         { 
             "RenderType" = "Opaque" 
+            "RenderPipeline" = "UniversalPipeline"
             "Queue" = "Geometry"
         }
         
-        LOD 200
+        LOD 300
         
-        CGPROGRAM
-        #pragma surface surf Standard fullforwardshadows vertex:vert
-        #pragma target 3.0
-        
-        sampler2D _MainTex;
-        
-        struct Input
+        Pass
         {
-            float2 uv_MainTex;
-            float3 worldPos;
-            float3 viewDir;
-            float3 worldNormal;
-        };
-        
-        // Properties
-        float4 _MetallicColor;
-        float _Metallic;
-        float _Smoothness;
-        
-        float4 _WaterColor;
-        float4 _DeepWaterColor;
-        float4 _SurfaceColor;
-        
-        float _WaterLevel;
-        float _TankHeight;
-        float _TankBottomY;
-        
-        float _Temperature;
-        float4 _HeatColor;
-        
-        float _WaveSpeed;
-        float _WaveAmplitude;
-        float _WaveFrequency;
-        float _FresnelPower;
-        
-        float _SimulationMode;
-        
-        void vert(inout appdata_full v, out Input o)
-        {
-            UNITY_INITIALIZE_OUTPUT(Input, o);
-            o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-            o.worldNormal = UnityObjectToWorldNormal(v.normal);
-        }
-        
-        void surf(Input IN, inout SurfaceOutputStandard o)
-        {
-            float4 texColor = tex2D(_MainTex, IN.uv_MainTex);
+            Name "ForwardLit"
+            Tags { "LightMode" = "UniversalForward" }
             
-            // Calculate water surface Y position in world space
-            float waterWorldY = _TankBottomY + (_WaterLevel * _TankHeight);
+            HLSLPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
+            #pragma multi_compile _ _SHADOWS_SOFT
             
-            // Check if this pixel is below water level
-            bool isUnderwater = IN.worldPos.y <= waterWorldY && _WaterLevel > 0.001;
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
             
-            // Simulation mode check (0 = metallic only, 1 = water simulation)
-            if (_SimulationMode < 0.5 || !isUnderwater)
+            struct Attributes
             {
-                // METALLIC MODE - Show tank material
-                o.Albedo = _MetallicColor.rgb * texColor.rgb;
-                o.Metallic = _Metallic;
-                o.Smoothness = _Smoothness;
-                o.Alpha = 1.0;
+                float4 positionOS : POSITION;
+                float3 normalOS : NORMAL;
+                float2 uv : TEXCOORD0;
+            };
+            
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                float3 positionWS : TEXCOORD0;
+                float3 normalWS : TEXCOORD1;
+                float2 uv : TEXCOORD2;
+                float3 viewDirWS : TEXCOORD3;
+            };
+            
+            TEXTURE2D(_BaseMap);
+            SAMPLER(sampler_BaseMap);
+            
+            CBUFFER_START(UnityPerMaterial)
+                float4 _BaseMap_ST;
+                float4 _BaseColor;
+                float _Metallic;
+                float _Smoothness;
+                float4 _WaterColor;
+                float4 _DeepWaterColor;
+                float4 _SurfaceColor;
+                float _WaterLevel;
+                float _TankHeight;
+                float _TankBottomY;
+                float _Temperature;
+                float4 _HeatColor;
+                float _SimulationMode;
+            CBUFFER_END
+            
+            Varyings vert(Attributes input)
+            {
+                Varyings output;
+                
+                VertexPositionInputs posInputs = GetVertexPositionInputs(input.positionOS.xyz);
+                VertexNormalInputs normInputs = GetVertexNormalInputs(input.normalOS);
+                
+                output.positionCS = posInputs.positionCS;
+                output.positionWS = posInputs.positionWS;
+                output.normalWS = normInputs.normalWS;
+                output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
+                output.viewDirWS = GetWorldSpaceViewDir(posInputs.positionWS);
+                
+                return output;
             }
-            else
+            
+            half4 frag(Varyings input) : SV_Target
             {
-                // WATER SIMULATION MODE
+                // Sample base texture
+                half4 baseMapColor = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
                 
-                // Calculate depth from surface
-                float depthFromSurface = waterWorldY - IN.worldPos.y;
-                float normalizedDepth = saturate(depthFromSurface / _TankHeight);
+                // Calculate water surface Y position
+                float waterWorldY = _TankBottomY + (_WaterLevel * _TankHeight);
                 
-                // Distance from water surface (for surface effects)
-                float surfaceDistance = abs(IN.worldPos.y - waterWorldY);
-                float surfaceFactor = 1.0 - saturate(surfaceDistance / 0.1); // Within 0.1 units of surface
+                // Check if below water level
+                bool isUnderwater = input.positionWS.y <= waterWorldY && _WaterLevel > 0.001;
                 
-                // Base water color - deeper = darker
-                float3 waterColor = lerp(_WaterColor.rgb, _DeepWaterColor.rgb, normalizedDepth);
+                half3 finalColor;
+                float finalSmoothness;
+                float finalMetallic;
                 
-                // Surface color blend (lighter at surface)
-                waterColor = lerp(waterColor, _SurfaceColor.rgb, surfaceFactor * 0.5);
-                
-                // Temperature effect - warmer = more red/orange tint
-                float tempFactor = saturate(_Temperature / 340.0);
-                waterColor = lerp(waterColor, _HeatColor.rgb, tempFactor * 0.4);
-                
-                // Fresnel effect for realistic water look
-                float fresnel = pow(1.0 - saturate(dot(IN.viewDir, IN.worldNormal)), _FresnelPower);
-                waterColor += fresnel * 0.15;
-                
-                // Animated ripples at surface
-                if (surfaceFactor > 0.1)
+                // Mode check: 0 = metallic, 1 = water simulation
+                if (_SimulationMode < 0.5 || !isUnderwater)
                 {
-                    float time = _Time.y * _WaveSpeed;
-                    float ripple = sin(IN.worldPos.x * _WaveFrequency + time) * 
-                                   cos(IN.worldPos.z * _WaveFrequency * 0.7 + time * 0.8);
-                    ripple *= _WaveAmplitude * surfaceFactor;
-                    waterColor += ripple;
+                    // METALLIC MODE - Tank material
+                    finalColor = _BaseColor.rgb * baseMapColor.rgb;
+                    finalMetallic = _Metallic;
+                    finalSmoothness = _Smoothness;
+                }
+                else
+                {
+                    // WATER MODE
+                    float depthFromSurface = waterWorldY - input.positionWS.y;
+                    float normalizedDepth = saturate(depthFromSurface / _TankHeight);
+                    
+                    // Surface distance for effects
+                    float surfaceDistance = abs(input.positionWS.y - waterWorldY);
+                    float surfaceFactor = 1.0 - saturate(surfaceDistance / 0.1);
+                    
+                    // Water color with depth
+                    half3 waterColor = lerp(_WaterColor.rgb, _DeepWaterColor.rgb, normalizedDepth);
+                    waterColor = lerp(waterColor, _SurfaceColor.rgb, surfaceFactor * 0.5);
+                    
+                    // Temperature effect
+                    float tempFactor = saturate(_Temperature / 340.0);
+                    waterColor = lerp(waterColor, _HeatColor.rgb, tempFactor * 0.4);
+                    
+                    // Fresnel
+                    float3 viewDir = normalize(input.viewDirWS);
+                    float3 normalWS = normalize(input.normalWS);
+                    float fresnel = pow(1.0 - saturate(dot(viewDir, normalWS)), 3.0);
+                    waterColor += fresnel * 0.15;
+                    
+                    // Surface ripples
+                    if (surfaceFactor > 0.1)
+                    {
+                        float ripple = sin(input.positionWS.x * 8 + _Time.y) * 
+                                       cos(input.positionWS.z * 6 + _Time.y * 0.8) * 0.02;
+                        waterColor += ripple * surfaceFactor;
+                    }
+                    
+                    finalColor = waterColor;
+                    finalMetallic = 0.0;
+                    finalSmoothness = 0.95;
                 }
                 
-                // Heat shimmer for hot water
-                if (_Temperature > 100)
-                {
-                    float shimmer = sin(IN.worldPos.y * 30 + _Time.y * 4) * 0.02 * tempFactor;
-                    waterColor += shimmer;
-                }
+                // Basic lighting
+                float3 normalWS = normalize(input.normalWS);
+                Light mainLight = GetMainLight();
+                float NdotL = saturate(dot(normalWS, mainLight.direction));
+                float3 diffuse = finalColor * mainLight.color * NdotL;
+                float3 ambient = finalColor * 0.2;
                 
-                o.Albedo = waterColor;
-                o.Metallic = 0.0;
-                o.Smoothness = 0.95; // Water is very smooth
-                o.Alpha = 1.0;
+                // Specular
+                float3 viewDir = normalize(input.viewDirWS);
+                float3 halfDir = normalize(mainLight.direction + viewDir);
+                float spec = pow(saturate(dot(normalWS, halfDir)), finalSmoothness * 128);
+                float3 specular = mainLight.color * spec * 0.5;
+                
+                half3 color = ambient + diffuse + specular;
+                
+                return half4(color, 1.0);
             }
+            ENDHLSL
         }
-        ENDCG
+        
+        // Shadow caster pass
+        Pass
+        {
+            Name "ShadowCaster"
+            Tags { "LightMode" = "ShadowCaster" }
+            
+            ZWrite On
+            ZTest LEqual
+            ColorMask 0
+            
+            HLSLPROGRAM
+            #pragma vertex ShadowVert
+            #pragma fragment ShadowFrag
+            
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+            
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS : NORMAL;
+            };
+            
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+            };
+            
+            float3 _LightDirection;
+            
+            Varyings ShadowVert(Attributes input)
+            {
+                Varyings output;
+                float3 positionWS = TransformObjectToWorld(input.positionOS.xyz);
+                float3 normalWS = TransformObjectToWorldNormal(input.normalOS);
+                output.positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, _LightDirection));
+                return output;
+            }
+            
+            half4 ShadowFrag(Varyings input) : SV_Target
+            {
+                return 0;
+            }
+            ENDHLSL
+        }
     }
     
-    FallBack "Standard"
+    FallBack "Universal Render Pipeline/Lit"
 }
