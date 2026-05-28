@@ -1,331 +1,163 @@
-Shader "SindishTech/WaterTankRealistic"
+Shader "SindishTech/WaterTankFill"
 {
     Properties
     {
-        // Water appearance
-        _WaterColor ("Water Color", Color) = (0.1, 0.4, 0.7, 0.85)
-        _DeepWaterColor ("Deep Water Color", Color) = (0.02, 0.15, 0.4, 0.95)
-        _FoamColor ("Foam/Surface Color", Color) = (0.6, 0.8, 0.9, 0.9)
+        // Tank base material (metallic look in editor)
+        _MainTex ("Main Texture", 2D) = "white" {}
+        _MetallicColor ("Metallic Color", Color) = (0.7, 0.7, 0.75, 1)
+        _Metallic ("Metallic", Range(0, 1)) = 0.8
+        _Smoothness ("Smoothness", Range(0, 1)) = 0.6
         
-        // Water level
-        _WaterLevel ("Water Level (0-1)", Range(0, 1)) = 0.5
+        // Water appearance
+        _WaterColor ("Water Color", Color) = (0.1, 0.4, 0.7, 0.9)
+        _DeepWaterColor ("Deep Water Color", Color) = (0.02, 0.15, 0.4, 0.95)
+        _SurfaceColor ("Surface Color", Color) = (0.4, 0.7, 0.9, 0.95)
+        
+        // Water level control
+        _WaterLevel ("Water Level (0-1)", Range(0, 1)) = 0.0
         _TankHeight ("Tank Height", Float) = 2.0
         _TankBottomY ("Tank Bottom Y Position", Float) = -1.0
         
-        // Surface properties
-        _Smoothness ("Smoothness", Range(0, 1)) = 0.95
-        _Metallic ("Metallic", Range(0, 1)) = 0.0
-        _FresnelPower ("Fresnel Power", Range(1, 10)) = 4.0
-        _RefractionStrength ("Refraction Strength", Range(0, 0.5)) = 0.1
-        
-        // Wave animation
-        _WaveSpeed ("Wave Speed", Range(0, 5)) = 1.0
-        _WaveAmplitude ("Wave Amplitude", Range(0, 0.1)) = 0.02
-        _WaveFrequency ("Wave Frequency", Range(0, 20)) = 5.0
-        _RippleStrength ("Ripple Strength", Range(0, 1)) = 0.3
-        
         // Temperature visual
         _Temperature ("Temperature (0-340)", Range(0, 340)) = 25
-        _HeatDistortion ("Heat Distortion", Range(0, 0.1)) = 0.02
         _HeatColor ("Heat Tint Color", Color) = (1, 0.3, 0.1, 1)
         
-        // Caustics & depth
-        _CausticsScale ("Caustics Scale", Range(0.1, 10)) = 2.0
-        _CausticsSpeed ("Caustics Speed", Range(0, 3)) = 0.5
-        _CausticsIntensity ("Caustics Intensity", Range(0, 2)) = 0.5
-        _DepthFade ("Depth Fade Distance", Range(0.1, 10)) = 2.0
+        // Water surface animation
+        _WaveSpeed ("Wave Speed", Range(0, 5)) = 1.0
+        _WaveAmplitude ("Wave Amplitude", Range(0, 0.05)) = 0.01
+        _WaveFrequency ("Wave Frequency", Range(0, 20)) = 8.0
         
-        // Normal map for surface detail
-        _NormalMap ("Normal Map", 2D) = "bump" {}
-        _NormalStrength ("Normal Strength", Range(0, 2)) = 1.0
-        _NormalTiling ("Normal Tiling", Range(0.1, 10)) = 1.0
+        // Fresnel for water
+        _FresnelPower ("Fresnel Power", Range(1, 10)) = 3.0
+        
+        // Mode control (0 = show metallic, 1 = show water simulation)
+        _SimulationMode ("Simulation Mode (0=Metallic, 1=Water)", Range(0, 1)) = 0
     }
     
     SubShader
     {
         Tags 
         { 
-            "RenderType" = "Transparent" 
-            "Queue" = "Transparent" 
-            "IgnoreProjector" = "True"
+            "RenderType" = "Opaque" 
+            "Queue" = "Geometry"
         }
         
-        LOD 300
+        LOD 200
         
-        // Render back faces first for proper transparency
-        Pass
+        CGPROGRAM
+        #pragma surface surf Standard fullforwardshadows vertex:vert
+        #pragma target 3.0
+        
+        sampler2D _MainTex;
+        
+        struct Input
         {
-            Name "BackFace"
-            Cull Front
-            ZWrite Off
-            Blend SrcAlpha OneMinusSrcAlpha
+            float2 uv_MainTex;
+            float3 worldPos;
+            float3 viewDir;
+            float3 worldNormal;
+        };
+        
+        // Properties
+        float4 _MetallicColor;
+        float _Metallic;
+        float _Smoothness;
+        
+        float4 _WaterColor;
+        float4 _DeepWaterColor;
+        float4 _SurfaceColor;
+        
+        float _WaterLevel;
+        float _TankHeight;
+        float _TankBottomY;
+        
+        float _Temperature;
+        float4 _HeatColor;
+        
+        float _WaveSpeed;
+        float _WaveAmplitude;
+        float _WaveFrequency;
+        float _FresnelPower;
+        
+        float _SimulationMode;
+        
+        void vert(inout appdata_full v, out Input o)
+        {
+            UNITY_INITIALIZE_OUTPUT(Input, o);
+            o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
+            o.worldNormal = UnityObjectToWorldNormal(v.normal);
+        }
+        
+        void surf(Input IN, inout SurfaceOutputStandard o)
+        {
+            float4 texColor = tex2D(_MainTex, IN.uv_MainTex);
             
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            #pragma multi_compile_fog
-            #include "UnityCG.cginc"
+            // Calculate water surface Y position in world space
+            float waterWorldY = _TankBottomY + (_WaterLevel * _TankHeight);
             
-            struct appdata
+            // Check if this pixel is below water level
+            bool isUnderwater = IN.worldPos.y <= waterWorldY && _WaterLevel > 0.001;
+            
+            // Simulation mode check (0 = metallic only, 1 = water simulation)
+            if (_SimulationMode < 0.5 || !isUnderwater)
             {
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
-                float2 uv : TEXCOORD0;
-            };
-            
-            struct v2f
-            {
-                float4 pos : SV_POSITION;
-                float3 worldPos : TEXCOORD0;
-                float3 worldNormal : TEXCOORD1;
-                float2 uv : TEXCOORD2;
-                float3 viewDir : TEXCOORD3;
-                UNITY_FOG_COORDS(4)
-            };
-            
-            float4 _WaterColor;
-            float4 _DeepWaterColor;
-            float _WaterLevel;
-            float _TankHeight;
-            float _TankBottomY;
-            float _Smoothness;
-            float _FresnelPower;
-            float _Temperature;
-            float4 _HeatColor;
-            
-            v2f vert(appdata v)
-            {
-                v2f o;
-                o.pos = UnityObjectToClipPos(v.vertex);
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                o.worldNormal = UnityObjectToWorldNormal(v.normal);
-                o.uv = v.uv;
-                o.viewDir = normalize(WorldSpaceViewDir(v.vertex));
-                UNITY_TRANSFER_FOG(o, o.pos);
-                return o;
+                // METALLIC MODE - Show tank material
+                o.Albedo = _MetallicColor.rgb * texColor.rgb;
+                o.Metallic = _Metallic;
+                o.Smoothness = _Smoothness;
+                o.Alpha = 1.0;
             }
-            
-            fixed4 frag(v2f i) : SV_Target
+            else
             {
-                // Clip above water level
-                float waterWorldY = _TankBottomY + (_WaterLevel * _TankHeight);
-                clip(waterWorldY - i.worldPos.y);
+                // WATER SIMULATION MODE
                 
-                // Depth-based color
-                float depth = (waterWorldY - i.worldPos.y) / _TankHeight;
-                float4 color = lerp(_WaterColor, _DeepWaterColor, saturate(depth * 2));
+                // Calculate depth from surface
+                float depthFromSurface = waterWorldY - IN.worldPos.y;
+                float normalizedDepth = saturate(depthFromSurface / _TankHeight);
                 
-                // Temperature tint
+                // Distance from water surface (for surface effects)
+                float surfaceDistance = abs(IN.worldPos.y - waterWorldY);
+                float surfaceFactor = 1.0 - saturate(surfaceDistance / 0.1); // Within 0.1 units of surface
+                
+                // Base water color - deeper = darker
+                float3 waterColor = lerp(_WaterColor.rgb, _DeepWaterColor.rgb, normalizedDepth);
+                
+                // Surface color blend (lighter at surface)
+                waterColor = lerp(waterColor, _SurfaceColor.rgb, surfaceFactor * 0.5);
+                
+                // Temperature effect - warmer = more red/orange tint
                 float tempFactor = saturate(_Temperature / 340.0);
-                color = lerp(color, _HeatColor, tempFactor * 0.3);
+                waterColor = lerp(waterColor, _HeatColor.rgb, tempFactor * 0.4);
                 
-                // Simple fresnel for back faces
-                float fresnel = pow(1.0 - saturate(dot(i.viewDir, -i.worldNormal)), _FresnelPower);
-                color.rgb += fresnel * 0.1;
+                // Fresnel effect for realistic water look
+                float fresnel = pow(1.0 - saturate(dot(IN.viewDir, IN.worldNormal)), _FresnelPower);
+                waterColor += fresnel * 0.15;
                 
-                color.a *= 0.6;
-                
-                UNITY_APPLY_FOG(i.fogCoord, color);
-                return color;
-            }
-            ENDCG
-        }
-        
-        // Front face pass
-        Pass
-        {
-            Name "FrontFace"
-            Cull Back
-            ZWrite On
-            Blend SrcAlpha OneMinusSrcAlpha
-            
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            #pragma multi_compile_fog
-            #include "UnityCG.cginc"
-            
-            struct appdata
-            {
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
-                float4 tangent : TANGENT;
-                float2 uv : TEXCOORD0;
-            };
-            
-            struct v2f
-            {
-                float4 pos : SV_POSITION;
-                float3 worldPos : TEXCOORD0;
-                float3 worldNormal : TEXCOORD1;
-                float2 uv : TEXCOORD2;
-                float3 viewDir : TEXCOORD3;
-                float3 worldTangent : TEXCOORD4;
-                float3 worldBitangent : TEXCOORD5;
-                UNITY_FOG_COORDS(6)
-            };
-            
-            float4 _WaterColor;
-            float4 _DeepWaterColor;
-            float4 _FoamColor;
-            float _WaterLevel;
-            float _TankHeight;
-            float _TankBottomY;
-            float _Smoothness;
-            float _Metallic;
-            float _FresnelPower;
-            float _RefractionStrength;
-            float _WaveSpeed;
-            float _WaveAmplitude;
-            float _WaveFrequency;
-            float _RippleStrength;
-            float _Temperature;
-            float _HeatDistortion;
-            float4 _HeatColor;
-            float _CausticsScale;
-            float _CausticsSpeed;
-            float _CausticsIntensity;
-            float _DepthFade;
-            sampler2D _NormalMap;
-            float _NormalStrength;
-            float _NormalTiling;
-            
-            // Simple noise function
-            float hash(float2 p)
-            {
-                float h = dot(p, float2(127.1, 311.7));
-                return frac(sin(h) * 43758.5453123);
-            }
-            
-            float noise(float2 p)
-            {
-                float2 i = floor(p);
-                float2 f = frac(p);
-                f = f * f * (3.0 - 2.0 * f);
-                
-                float a = hash(i);
-                float b = hash(i + float2(1.0, 0.0));
-                float c = hash(i + float2(0.0, 1.0));
-                float d = hash(i + float2(1.0, 1.0));
-                
-                return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
-            }
-            
-            // Caustics pattern
-            float caustics(float2 uv, float time)
-            {
-                float2 p = uv * _CausticsScale;
-                float c = 0;
-                c += noise(p + time * 0.3) * 0.5;
-                c += noise(p * 2.0 - time * 0.2) * 0.25;
-                c += noise(p * 4.0 + time * 0.1) * 0.125;
-                return c;
-            }
-            
-            v2f vert(appdata v)
-            {
-                v2f o;
-                
-                float3 worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                float waterWorldY = _TankBottomY + (_WaterLevel * _TankHeight);
-                
-                // Add wave displacement at water surface
-                float surfaceDist = abs(worldPos.y - waterWorldY);
-                if (surfaceDist < 0.1 && worldPos.y <= waterWorldY + 0.05)
+                // Animated ripples at surface
+                if (surfaceFactor > 0.1)
                 {
-                    float wave = sin(worldPos.x * _WaveFrequency + _Time.y * _WaveSpeed) * _WaveAmplitude;
-                    wave += cos(worldPos.z * _WaveFrequency * 0.7 + _Time.y * _WaveSpeed * 0.8) * _WaveAmplitude * 0.5;
-                    v.vertex.y += wave;
+                    float time = _Time.y * _WaveSpeed;
+                    float ripple = sin(IN.worldPos.x * _WaveFrequency + time) * 
+                                   cos(IN.worldPos.z * _WaveFrequency * 0.7 + time * 0.8);
+                    ripple *= _WaveAmplitude * surfaceFactor;
+                    waterColor += ripple;
                 }
                 
-                o.pos = UnityObjectToClipPos(v.vertex);
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                o.worldNormal = UnityObjectToWorldNormal(v.normal);
-                o.worldTangent = UnityObjectToWorldDir(v.tangent.xyz);
-                o.worldBitangent = cross(o.worldNormal, o.worldTangent) * v.tangent.w;
-                o.uv = v.uv;
-                o.viewDir = normalize(WorldSpaceViewDir(v.vertex));
-                UNITY_TRANSFER_FOG(o, o.pos);
-                return o;
-            }
-            
-            fixed4 frag(v2f i) : SV_Target
-            {
-                // Clip above water level
-                float waterWorldY = _TankBottomY + (_WaterLevel * _TankHeight);
-                clip(waterWorldY - i.worldPos.y);
-                
-                float time = _Time.y;
-                
-                // UV animation for normal map
-                float2 animUV1 = i.uv * _NormalTiling + float2(time * 0.02, time * 0.01);
-                float2 animUV2 = i.uv * _NormalTiling * 1.5 - float2(time * 0.015, time * 0.02);
-                
-                // Sample and blend normal maps
-                float3 normal1 = UnpackNormal(tex2D(_NormalMap, animUV1));
-                float3 normal2 = UnpackNormal(tex2D(_NormalMap, animUV2));
-                float3 blendedNormal = normalize(float3(
-                    (normal1.xy + normal2.xy) * _NormalStrength,
-                    1.0
-                ));
-                
-                // Transform normal to world space
-                float3x3 TBN = float3x3(i.worldTangent, i.worldBitangent, i.worldNormal);
-                float3 worldNormal = normalize(mul(blendedNormal, TBN));
-                
-                // Depth calculation
-                float depth = (waterWorldY - i.worldPos.y) / _TankHeight;
-                float depthFactor = saturate(depth / (_DepthFade / _TankHeight));
-                
-                // Base water color with depth
-                float4 color = lerp(_WaterColor, _DeepWaterColor, depthFactor);
-                
-                // Surface foam near water level
-                float surfaceDist = abs(i.worldPos.y - waterWorldY) / _TankHeight;
-                float foamFactor = 1.0 - saturate(surfaceDist * 20.0);
-                color = lerp(color, _FoamColor, foamFactor * 0.3);
-                
-                // Temperature effect
-                float tempFactor = saturate(_Temperature / 340.0);
-                float4 tempColor = lerp(color, _HeatColor, tempFactor * 0.4);
-                color = lerp(color, tempColor, tempFactor);
-                
-                // Heat distortion (shimmer effect at high temps)
+                // Heat shimmer for hot water
                 if (_Temperature > 100)
                 {
-                    float heatShimmer = sin(i.worldPos.y * 50 + time * 3) * _HeatDistortion * tempFactor;
-                    color.rgb += heatShimmer;
+                    float shimmer = sin(IN.worldPos.y * 30 + _Time.y * 4) * 0.02 * tempFactor;
+                    waterColor += shimmer;
                 }
                 
-                // Caustics
-                float causticsValue = caustics(i.uv, time * _CausticsSpeed);
-                color.rgb += causticsValue * _CausticsIntensity * (1.0 - depthFactor) * 0.5;
-                
-                // Fresnel effect
-                float NdotV = saturate(dot(worldNormal, i.viewDir));
-                float fresnel = pow(1.0 - NdotV, _FresnelPower);
-                color.rgb += fresnel * 0.2;
-                
-                // Specular highlight (simple Blinn-Phong)
-                float3 lightDir = normalize(_WorldSpaceLightPos0.xyz);
-                float3 halfDir = normalize(lightDir + i.viewDir);
-                float spec = pow(saturate(dot(worldNormal, halfDir)), _Smoothness * 256);
-                color.rgb += spec * 0.5;
-                
-                // Ripple effect when water is flowing (simulated via time)
-                float ripple = sin(length(i.worldPos.xz) * 10 - time * 2) * _RippleStrength * 0.05;
-                color.rgb += ripple;
-                
-                // Alpha based on depth and fresnel
-                color.a = lerp(_WaterColor.a, _DeepWaterColor.a, depthFactor);
-                color.a = lerp(color.a, 1.0, fresnel * 0.3);
-                
-                UNITY_APPLY_FOG(i.fogCoord, color);
-                return color;
+                o.Albedo = waterColor;
+                o.Metallic = 0.0;
+                o.Smoothness = 0.95; // Water is very smooth
+                o.Alpha = 1.0;
             }
-            ENDCG
         }
+        ENDCG
     }
     
-    FallBack "Transparent/Diffuse"
+    FallBack "Standard"
 }

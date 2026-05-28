@@ -4,7 +4,12 @@ namespace SindishTech.WaterTankSimulator
 {
     /// <summary>
     /// Controls the water shader material properties based on simulation state.
-    /// Attach this to the Tank mesh or a child water plane object.
+    /// Attach this to the Tank mesh.
+    /// 
+    /// BEHAVIOR:
+    /// - In Editor Mode (not playing): Shows metallic tank material
+    /// - In Play Mode with Simulation Running: Shows water filling shader
+    /// - Water level and temperature are driven by the simulation
     /// </summary>
     [ExecuteInEditMode]
     [AddComponentMenu("SindishTech/Water Level Controller")]
@@ -15,7 +20,7 @@ namespace SindishTech.WaterTankSimulator
         public WaterTankSimulation simulation;
 
         [Tooltip("The renderer with the water material")]
-        public Renderer waterRenderer;
+        public Renderer tankRenderer;
 
         [Header("Tank Dimensions")]
         [Tooltip("Height of the tank in world units")]
@@ -28,16 +33,21 @@ namespace SindishTech.WaterTankSimulator
         [Tooltip("Material instance index (if multiple materials on renderer)")]
         public int materialIndex = 0;
 
-        private Material waterMaterial;
+        [Header("Mode Control")]
+        [Tooltip("When true, simulation mode runs even in Editor (for testing)")]
+        public bool forceSimulationModeInEditor = false;
+
+        private Material tankMaterial;
         private static readonly int WaterLevelID = Shader.PropertyToID("_WaterLevel");
         private static readonly int TankHeightID = Shader.PropertyToID("_TankHeight");
         private static readonly int TankBottomYID = Shader.PropertyToID("_TankBottomY");
         private static readonly int TemperatureID = Shader.PropertyToID("_Temperature");
+        private static readonly int SimulationModeID = Shader.PropertyToID("_SimulationMode");
 
         private void OnEnable()
         {
-            if (waterRenderer == null)
-                waterRenderer = GetComponent<Renderer>();
+            if (tankRenderer == null)
+                tankRenderer = GetComponent<Renderer>();
 
             UpdateMaterialReference();
 
@@ -59,43 +69,68 @@ namespace SindishTech.WaterTankSimulator
 
         private void Update()
         {
-            if (simulation == null || waterMaterial == null) return;
+            if (tankMaterial == null)
+            {
+                UpdateMaterialReference();
+                if (tankMaterial == null) return;
+            }
 
-            // Continuous update for edit mode
+            // Determine simulation mode
+            // Mode 0 = Metallic (editor mode, no water)
+            // Mode 1 = Water simulation active
+            bool simulationActive = false;
+            
+            if (Application.isPlaying)
+            {
+                // In Play mode: show water when simulation is running
+                simulationActive = simulation != null && simulation.IsSimulationRunning;
+            }
+            else
+            {
+                // In Editor mode: show metallic unless forced
+                simulationActive = forceSimulationModeInEditor && simulation != null && simulation.IsSimulationRunning;
+            }
+
+            tankMaterial.SetFloat(SimulationModeID, simulationActive ? 1f : 0f);
+
+            if (simulation == null) return;
+
+            // Update water level
             float level = simulation.WaterLevelPercentage / 100f;
-            waterMaterial.SetFloat(WaterLevelID, level);
-            waterMaterial.SetFloat(TankHeightID, tankHeight);
-            waterMaterial.SetFloat(TankBottomYID, tankBottomY);
-            waterMaterial.SetFloat(TemperatureID, simulation.CurrentTemperature);
+            tankMaterial.SetFloat(WaterLevelID, level);
+            tankMaterial.SetFloat(TankHeightID, tankHeight);
+            tankMaterial.SetFloat(TankBottomYID, tankBottomY);
+            tankMaterial.SetFloat(TemperatureID, simulation.CurrentTemperature);
         }
 
         private void UpdateMaterialReference()
         {
-            if (waterRenderer == null) return;
+            if (tankRenderer == null) return;
 
+            // Always use material instance in play mode, shared in editor
             if (Application.isPlaying)
             {
-                if (waterRenderer.materials.Length > materialIndex)
-                    waterMaterial = waterRenderer.materials[materialIndex];
+                if (tankRenderer.materials.Length > materialIndex)
+                    tankMaterial = tankRenderer.materials[materialIndex];
             }
             else
             {
-                if (waterRenderer.sharedMaterials.Length > materialIndex)
-                    waterMaterial = waterRenderer.sharedMaterials[materialIndex];
+                if (tankRenderer.sharedMaterials.Length > materialIndex)
+                    tankMaterial = tankRenderer.sharedMaterials[materialIndex];
             }
         }
 
         private void OnWaterLevelChanged(float level)
         {
-            if (waterMaterial == null) return;
+            if (tankMaterial == null) return;
             float normalizedLevel = level / simulation.tankCapacity;
-            waterMaterial.SetFloat(WaterLevelID, normalizedLevel);
+            tankMaterial.SetFloat(WaterLevelID, normalizedLevel);
         }
 
         private void OnTemperatureChanged(float temperature)
         {
-            if (waterMaterial == null) return;
-            waterMaterial.SetFloat(TemperatureID, temperature);
+            if (tankMaterial == null) return;
+            tankMaterial.SetFloat(TemperatureID, temperature);
         }
 
         /// <summary>
@@ -104,11 +139,23 @@ namespace SindishTech.WaterTankSimulator
         [ContextMenu("Auto Detect Tank Dimensions")]
         public void AutoDetectDimensions()
         {
-            if (waterRenderer == null) return;
+            if (tankRenderer == null) return;
 
-            Bounds bounds = waterRenderer.bounds;
+            Bounds bounds = tankRenderer.bounds;
             tankHeight = bounds.size.y;
             tankBottomY = bounds.min.y;
+            
+            Debug.Log($"Tank dimensions detected: Height = {tankHeight}, Bottom Y = {tankBottomY}");
+        }
+
+        /// <summary>
+        /// Force refresh material reference.
+        /// </summary>
+        [ContextMenu("Refresh Material")]
+        public void RefreshMaterial()
+        {
+            tankMaterial = null;
+            UpdateMaterialReference();
         }
     }
 }

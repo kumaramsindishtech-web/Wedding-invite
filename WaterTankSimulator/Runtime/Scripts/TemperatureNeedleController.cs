@@ -16,16 +16,16 @@ namespace SindishTech.WaterTankSimulator
         public WaterTankSimulation simulation;
 
         [Header("Needle Configuration")]
-        [Tooltip("Rotation axis for the needle (local space)")]
-        public Vector3 rotationAxis = Vector3.forward;
+        [Tooltip("Rotation axis for the needle (local space) - Set to (1,0,0) for X-axis rotation")]
+        public Vector3 rotationAxis = Vector3.right; // X-axis by default
 
-        [Tooltip("Angle when temperature is at minimum (degrees)")]
+        [Tooltip("Angle when temperature is at minimum (0°C) - X rotation value")]
         [Range(-360f, 360f)]
-        public float minAngle = 135f;
+        public float minAngle = 0f; // 0 degrees at 0°C
 
-        [Tooltip("Angle when temperature is at maximum (degrees)")]
+        [Tooltip("Angle when temperature is at maximum (340°C) - X rotation value")]
         [Range(-360f, 360f)]
-        public float maxAngle = -135f;
+        public float maxAngle = -260f; // -260 degrees at 340°C
 
         [Tooltip("Minimum temperature value (maps to minAngle)")]
         public float minTemperature = 0f;
