@@ -5,7 +5,14 @@ namespace SindishTech.WaterTankSimulator
     /// <summary>
     /// Controls the temperature gauge needle rotation based on simulation temperature.
     /// Attach this to the "needle" object in your Blender-imported model.
-    /// The needle rotates around its local Z-axis (or configurable axis).
+    /// 
+    /// SETUP:
+    /// 1. Position the needle at 0°C (rest position) in the scene
+    /// 2. Click "Capture Zero Position" in context menu
+    /// 3. Assign the simulation reference
+    /// 4. Adjust minAngle/maxAngle if needed
+    /// 
+    /// Default: X-axis rotation, 0° at 0°C, -260° at 340°C
     /// </summary>
     [ExecuteInEditMode]
     [AddComponentMenu("SindishTech/Temperature Needle Controller")]
@@ -16,22 +23,26 @@ namespace SindishTech.WaterTankSimulator
         public WaterTankSimulation simulation;
 
         [Header("Needle Configuration")]
-        [Tooltip("Rotation axis for the needle (local space) - Set to (1,0,0) for X-axis rotation")]
-        public Vector3 rotationAxis = Vector3.right; // X-axis by default
+        [Tooltip("Which local axis the needle rotates around")]
+        public RotationAxisOption axis = RotationAxisOption.X;
 
-        [Tooltip("Angle when temperature is at minimum (0°C) - X rotation value")]
+        [Tooltip("Euler angle at minimum temperature (0°C)")]
         [Range(-360f, 360f)]
-        public float minAngle = 0f; // 0 degrees at 0°C
+        public float minAngle = 0f;
 
-        [Tooltip("Angle when temperature is at maximum (340°C) - X rotation value")]
+        [Tooltip("Euler angle at maximum temperature (340°C)")]
         [Range(-360f, 360f)]
-        public float maxAngle = -260f; // -260 degrees at 340°C
+        public float maxAngle = -260f;
 
-        [Tooltip("Minimum temperature value (maps to minAngle)")]
+        [Tooltip("Minimum temperature (maps to minAngle)")]
         public float minTemperature = 0f;
 
-        [Tooltip("Maximum temperature value (maps to maxAngle)")]
+        [Tooltip("Maximum temperature (maps to maxAngle)")]
         public float maxTemperature = 340f;
+
+        [Header("Rest Position (Captured)")]
+        [Tooltip("The local euler angles when needle is at 0°C / rest. Click 'Capture Zero Position' to set.")]
+        public Vector3 restEulerAngles = Vector3.zero;
 
         [Header("Smoothing")]
         [Tooltip("How smoothly the needle moves to target position")]
@@ -42,7 +53,7 @@ namespace SindishTech.WaterTankSimulator
         public bool enableSmoothing = true;
 
         [Header("Needle Bounce (Realistic)")]
-        [Tooltip("Enable bounce/overshoot when needle reaches target")]
+        [Tooltip("Enable bounce/overshoot effect")]
         public bool enableBounce = true;
 
         [Tooltip("Bounce damping factor")]
@@ -53,27 +64,18 @@ namespace SindishTech.WaterTankSimulator
         [Range(1f, 50f)]
         public float bounceStiffness = 15f;
 
-        [Header("Debug")]
-        [Tooltip("Show the current needle angle in inspector")]
-        [SerializeField]
-        private float currentAngle = 0f;
+        [Header("Debug (Read Only)")]
+        [SerializeField] private float currentAngle = 0f;
+        [SerializeField] private float targetAngle = 0f;
+        [SerializeField] private float debugTemperature = 0f;
 
-        [SerializeField]
-        private float targetAngle = 0f;
-
-        // Internal state for bounce physics
+        // Internal
         private float velocity = 0f;
-        private Quaternion initialRotation;
-        private bool initialized = false;
+
+        public enum RotationAxisOption { X, Y, Z }
 
         private void OnEnable()
         {
-            if (!initialized)
-            {
-                initialRotation = transform.localRotation;
-                initialized = true;
-            }
-
             if (simulation != null)
             {
                 simulation.OnTemperatureChanged += OnTemperatureChanged;
@@ -92,29 +94,31 @@ namespace SindishTech.WaterTankSimulator
         {
             if (simulation == null) return;
 
-            // Calculate target angle based on current temperature
-            float tempNormalized = Mathf.InverseLerp(minTemperature, maxTemperature, simulation.CurrentTemperature);
-            targetAngle = Mathf.Lerp(minAngle, maxAngle, tempNormalized);
+            // Get current temperature
+            float temperature = simulation.CurrentTemperature;
+            debugTemperature = temperature;
 
-            // Apply smoothing or direct positioning
+            // Map temperature to angle
+            float t = Mathf.InverseLerp(minTemperature, maxTemperature, temperature);
+            targetAngle = Mathf.Lerp(minAngle, maxAngle, t);
+
+            // Apply smoothing
             if (enableSmoothing)
             {
                 if (enableBounce)
                 {
-                    // Spring-damper physics for realistic needle bounce
                     float springForce = (targetAngle - currentAngle) * bounceStiffness;
                     float dampingForce = -velocity * bounceDamping * 10f;
                     float acceleration = springForce + dampingForce;
 
-                    float deltaTime = GetDeltaTime();
-                    velocity += acceleration * deltaTime;
-                    currentAngle += velocity * deltaTime;
+                    float dt = GetDeltaTime();
+                    velocity += acceleration * dt;
+                    currentAngle += velocity * dt;
                 }
                 else
                 {
-                    // Simple smooth lerp
-                    float deltaTime = GetDeltaTime();
-                    currentAngle = Mathf.Lerp(currentAngle, targetAngle, smoothSpeed * deltaTime);
+                    float dt = GetDeltaTime();
+                    currentAngle = Mathf.Lerp(currentAngle, targetAngle, smoothSpeed * dt);
                 }
             }
             else
@@ -123,37 +127,61 @@ namespace SindishTech.WaterTankSimulator
                 velocity = 0f;
             }
 
-            // Apply rotation
-            ApplyRotation(currentAngle);
+            // Apply the rotation directly using euler angles
+            ApplyNeedleRotation(currentAngle);
         }
 
-        private void ApplyRotation(float angle)
+        private void ApplyNeedleRotation(float angle)
         {
-            Quaternion rotation = Quaternion.AngleAxis(angle, rotationAxis);
-            transform.localRotation = initialRotation * rotation;
+            Vector3 euler = restEulerAngles;
+
+            switch (axis)
+            {
+                case RotationAxisOption.X:
+                    euler.x = restEulerAngles.x + angle;
+                    break;
+                case RotationAxisOption.Y:
+                    euler.y = restEulerAngles.y + angle;
+                    break;
+                case RotationAxisOption.Z:
+                    euler.z = restEulerAngles.z + angle;
+                    break;
+            }
+
+            transform.localEulerAngles = euler;
         }
 
         private float GetDeltaTime()
         {
 #if UNITY_EDITOR
             if (!Application.isPlaying)
-            {
-                // Use a fixed delta time in edit mode
-                return 0.016f; // ~60fps equivalent
-            }
+                return 0.016f;
 #endif
             return Time.deltaTime;
         }
 
         private void OnTemperatureChanged(float temperature)
         {
-            // Event-driven update (also updates via Update loop)
-            float tempNormalized = Mathf.InverseLerp(minTemperature, maxTemperature, temperature);
-            targetAngle = Mathf.Lerp(minAngle, maxAngle, tempNormalized);
+            float t = Mathf.InverseLerp(minTemperature, maxTemperature, temperature);
+            targetAngle = Mathf.Lerp(minAngle, maxAngle, t);
         }
 
         /// <summary>
-        /// Reset needle to zero/rest position.
+        /// Call this when the needle is visually pointing at 0°C.
+        /// It captures the current rotation as the rest/zero position.
+        /// </summary>
+        [ContextMenu("Capture Zero Position")]
+        public void CaptureZeroPosition()
+        {
+            restEulerAngles = transform.localEulerAngles;
+            currentAngle = 0f;
+            targetAngle = 0f;
+            velocity = 0f;
+            Debug.Log($"[NeedleController] Zero position captured: {restEulerAngles}");
+        }
+
+        /// <summary>
+        /// Reset needle to rest/zero position.
         /// </summary>
         [ContextMenu("Reset Needle")]
         public void ResetNeedle()
@@ -161,27 +189,32 @@ namespace SindishTech.WaterTankSimulator
             currentAngle = minAngle;
             targetAngle = minAngle;
             velocity = 0f;
-            ApplyRotation(currentAngle);
+            ApplyNeedleRotation(currentAngle);
         }
 
         /// <summary>
-        /// Calibrate the needle by setting current position as the initial rotation.
+        /// Test: Move needle to max temperature position.
         /// </summary>
-        [ContextMenu("Set Current As Initial Rotation")]
-        public void CalibrateInitialRotation()
+        [ContextMenu("Test Max Position")]
+        public void TestMaxPosition()
         {
-            initialRotation = transform.localRotation;
-            currentAngle = 0f;
+            currentAngle = maxAngle;
+            targetAngle = maxAngle;
             velocity = 0f;
+            ApplyNeedleRotation(currentAngle);
         }
 
-        private void OnValidate()
+        /// <summary>
+        /// Test: Move needle to mid position (~170°C).
+        /// </summary>
+        [ContextMenu("Test Mid Position")]
+        public void TestMidPosition()
         {
-            if (!initialized)
-            {
-                initialRotation = transform.localRotation;
-                initialized = true;
-            }
+            float midAngle = (minAngle + maxAngle) / 2f;
+            currentAngle = midAngle;
+            targetAngle = midAngle;
+            velocity = 0f;
+            ApplyNeedleRotation(midAngle);
         }
     }
 }
