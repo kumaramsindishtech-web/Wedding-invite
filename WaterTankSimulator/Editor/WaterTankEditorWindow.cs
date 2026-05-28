@@ -1,541 +1,516 @@
 using UnityEngine;
 using UnityEditor;
-using System.Linq;
 
 namespace SindishTech.WaterTankSimulator.Editor
 {
     /// <summary>
-    /// Custom Editor Window for the Water Tank Simulation.
-    /// Provides visual controls, gauges, and status indicators.
+    /// Professional Editor Window for the Water Tank Simulation.
+    /// Clean, modern UI with visual gauges and controls.
     /// </summary>
     public class WaterTankEditorWindow : EditorWindow
     {
         private WaterTankSimulation simulation;
         private Vector2 scrollPosition;
 
-        // UI Colors
-        private static readonly Color HeaderColor = new Color(0.15f, 0.15f, 0.2f, 1f);
-        private static readonly Color PanelColor = new Color(0.2f, 0.2f, 0.25f, 1f);
-        private static readonly Color AccentBlue = new Color(0.3f, 0.6f, 0.9f, 1f);
-        private static readonly Color AccentGreen = new Color(0.3f, 0.8f, 0.4f, 1f);
-        private static readonly Color AccentRed = new Color(0.9f, 0.2f, 0.2f, 1f);
-        private static readonly Color AccentYellow = new Color(0.9f, 0.8f, 0.2f, 1f);
-        private static readonly Color AccentOrange = new Color(0.9f, 0.5f, 0.1f, 1f);
-        private static readonly Color WaterColor = new Color(0.2f, 0.5f, 0.9f, 0.8f);
-        private static readonly Color EmptyColor = new Color(0.1f, 0.1f, 0.15f, 1f);
+        // Colors - Modern Dark Theme
+        private static readonly Color BgDark = new Color(0.12f, 0.12f, 0.14f, 1f);
+        private static readonly Color BgPanel = new Color(0.18f, 0.18f, 0.20f, 1f);
+        private static readonly Color BgLight = new Color(0.22f, 0.22f, 0.25f, 1f);
+        private static readonly Color BorderColor = new Color(0.3f, 0.3f, 0.35f, 1f);
+        
+        private static readonly Color Blue = new Color(0.25f, 0.55f, 0.9f, 1f);
+        private static readonly Color Green = new Color(0.2f, 0.75f, 0.4f, 1f);
+        private static readonly Color Red = new Color(0.9f, 0.25f, 0.25f, 1f);
+        private static readonly Color Yellow = new Color(0.95f, 0.75f, 0.1f, 1f);
+        private static readonly Color Orange = new Color(0.95f, 0.5f, 0.15f, 1f);
+        private static readonly Color Cyan = new Color(0.3f, 0.85f, 0.9f, 1f);
+        private static readonly Color TextWhite = new Color(0.9f, 0.9f, 0.92f, 1f);
+        private static readonly Color TextGray = new Color(0.6f, 0.6f, 0.65f, 1f);
 
-        // Styles (lazy initialized)
-        private GUIStyle headerStyle;
-        private GUIStyle subHeaderStyle;
+        // Cached styles
+        private GUIStyle titleStyle;
+        private GUIStyle sectionStyle;
+        private GUIStyle labelStyle;
         private GUIStyle valueStyle;
-        private GUIStyle warningStyle;
-        private GUIStyle buttonStyle;
-        private GUIStyle panelStyle;
+        private GUIStyle smallLabelStyle;
+        private bool stylesInitialized;
 
         [MenuItem("SindishTech/Water Tank Simulator")]
         public static void ShowWindow()
         {
-            var window = GetWindow<WaterTankEditorWindow>("Water Tank Simulator");
-            window.minSize = new Vector2(400, 700);
+            var window = GetWindow<WaterTankEditorWindow>("Tank Simulator");
+            window.minSize = new Vector2(320, 600);
+            window.maxSize = new Vector2(400, 900);
             window.Show();
         }
 
         private void OnEnable()
         {
-            EditorApplication.update += Repaint;
+            EditorApplication.update += OnEditorUpdate;
         }
 
         private void OnDisable()
         {
-            EditorApplication.update -= Repaint;
+            EditorApplication.update -= OnEditorUpdate;
+        }
+
+        private void OnEditorUpdate()
+        {
+            if (simulation != null && simulation.IsSimulationRunning)
+                Repaint();
         }
 
         private void InitStyles()
         {
-            if (headerStyle != null) return;
+            if (stylesInitialized) return;
 
-            headerStyle = new GUIStyle(EditorStyles.boldLabel)
+            titleStyle = new GUIStyle(EditorStyles.boldLabel)
             {
-                fontSize = 16,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = Color.white }
+                fontSize = 11,
+                alignment = TextAnchor.MiddleLeft,
+                normal = { textColor = Cyan },
+                padding = new RectOffset(0, 0, 2, 2)
             };
 
-            subHeaderStyle = new GUIStyle(EditorStyles.boldLabel)
+            sectionStyle = new GUIStyle(EditorStyles.boldLabel)
             {
-                fontSize = 12,
-                normal = { textColor = AccentBlue }
+                fontSize = 10,
+                alignment = TextAnchor.MiddleLeft,
+                normal = { textColor = TextGray }
+            };
+
+            labelStyle = new GUIStyle(EditorStyles.label)
+            {
+                fontSize = 10,
+                normal = { textColor = TextGray }
             };
 
             valueStyle = new GUIStyle(EditorStyles.label)
             {
-                fontSize = 14,
-                fontStyle = FontStyle.Bold,
-                alignment = TextAnchor.MiddleRight,
-                normal = { textColor = Color.white }
-            };
-
-            warningStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                fontSize = 11,
-                alignment = TextAnchor.MiddleCenter
-            };
-
-            buttonStyle = new GUIStyle(GUI.skin.button)
-            {
                 fontSize = 12,
                 fontStyle = FontStyle.Bold,
-                fixedHeight = 30
+                alignment = TextAnchor.MiddleRight,
+                normal = { textColor = TextWhite }
             };
 
-            panelStyle = new GUIStyle(GUI.skin.box)
+            smallLabelStyle = new GUIStyle(EditorStyles.miniLabel)
             {
-                padding = new RectOffset(10, 10, 10, 10),
-                margin = new RectOffset(5, 5, 5, 5)
+                fontSize = 9,
+                normal = { textColor = TextGray }
             };
+
+            stylesInitialized = true;
         }
 
         private void OnGUI()
         {
             InitStyles();
 
-            // Find simulation in scene
+            // Find simulation
             if (simulation == null)
-            {
                 simulation = FindObjectOfType<WaterTankSimulation>();
-            }
+
+            // Background
+            EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), BgDark);
 
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
-
-            // Header
-            DrawHeader();
+            GUILayout.Space(8);
 
             if (simulation == null)
             {
-                DrawNoSimulationMessage();
-                EditorGUILayout.EndScrollView();
-                return;
+                DrawNoSimulation();
+            }
+            else
+            {
+                DrawControlPanel();
+                GUILayout.Space(6);
+                DrawStatusPanel();
+                GUILayout.Space(6);
+                DrawValvesPanel();
+                GUILayout.Space(6);
+                DrawGaugesPanel();
+                GUILayout.Space(6);
+                DrawSettingsPanel();
+                GUILayout.Space(6);
+                DrawWarningsPanel();
             }
 
-            // Main Panels
-            DrawSimulationControls();
-            EditorGUILayout.Space(5);
-            DrawScenarioSelection();
-            EditorGUILayout.Space(5);
-            DrawValveControls();
-            EditorGUILayout.Space(5);
-            DrawFlowRates();
-            EditorGUILayout.Space(5);
-            DrawTankStatus();
-            EditorGUILayout.Space(5);
-            DrawTemperatureGauge();
-            EditorGUILayout.Space(5);
-            DrawPressureGauge();
-            EditorGUILayout.Space(5);
-            DrawThermalControl();
-            EditorGUILayout.Space(5);
-            DrawWarnings();
-
+            GUILayout.Space(8);
             EditorGUILayout.EndScrollView();
 
-            // Mark dirty for undo support
             if (GUI.changed && simulation != null)
-            {
                 EditorUtility.SetDirty(simulation);
-            }
         }
 
-        // ─── HEADER ─────────────────────────────────────────────────
-
-        private void DrawHeader()
+        private void DrawNoSimulation()
         {
-            EditorGUILayout.BeginVertical(panelStyle);
-            var rect = GUILayoutUtility.GetRect(GUIContent.none, headerStyle, GUILayout.Height(40));
-            EditorGUI.DrawRect(rect, HeaderColor);
-            EditorGUI.LabelField(rect, "WATER TANK SIMULATION CONTROLLER", headerStyle);
-            EditorGUILayout.EndVertical();
-        }
-
-        private void DrawNoSimulationMessage()
-        {
-            EditorGUILayout.Space(20);
-            EditorGUILayout.HelpBox(
-                "No WaterTankSimulation component found in the scene.\n\n" +
-                "Add the 'WaterTankSimulation' component to a GameObject in your scene to begin.",
-                MessageType.Warning);
-
-            EditorGUILayout.Space(10);
-            if (GUILayout.Button("Create Water Tank Simulation", buttonStyle))
+            DrawPanel("NO SIMULATION FOUND", () =>
             {
-                var go = new GameObject("WaterTankSimulation");
-                go.AddComponent<WaterTankSimulation>();
-                Selection.activeGameObject = go;
-                simulation = go.GetComponent<WaterTankSimulation>();
-            }
+                GUILayout.Space(10);
+                EditorGUILayout.LabelField("Add WaterTankSimulation to a GameObject", labelStyle);
+                GUILayout.Space(10);
+                
+                if (DrawButton("Create Simulation", Green, 32))
+                {
+                    var go = new GameObject("WaterTankSimulation");
+                    go.AddComponent<WaterTankSimulation>();
+                    Selection.activeGameObject = go;
+                    simulation = go.GetComponent<WaterTankSimulation>();
+                }
+            });
         }
 
-        // ─── SIMULATION CONTROLS ────────────────────────────────────
-
-        private void DrawSimulationControls()
+        // ═══════════════════════════════════════════════════════════
+        // CONTROL PANEL
+        // ═══════════════════════════════════════════════════════════
+        private void DrawControlPanel()
         {
-            EditorGUILayout.BeginVertical(panelStyle);
-            EditorGUILayout.LabelField("SIMULATION CONTROL", subHeaderStyle);
-            EditorGUILayout.Space(5);
-
-            EditorGUILayout.BeginHorizontal();
-
-            // Start/Stop Button
-            GUI.backgroundColor = simulation.IsSimulationRunning ? AccentRed : AccentGreen;
-            string simButtonText = simulation.IsSimulationRunning ? "STOP" : "START";
-            if (GUILayout.Button(simButtonText, buttonStyle, GUILayout.Width(120)))
+            DrawPanel("SIMULATION", () =>
             {
-                if (simulation.IsSimulationRunning)
-                    simulation.StopSimulation();
+                EditorGUILayout.BeginHorizontal();
+                
+                // Start/Stop
+                Color btnColor = simulation.IsSimulationRunning ? Red : Green;
+                string btnText = simulation.IsSimulationRunning ? "■ STOP" : "▶ START";
+                if (DrawButton(btnText, btnColor, 28))
+                {
+                    if (simulation.IsSimulationRunning)
+                        simulation.StopSimulation();
+                    else
+                        simulation.StartSimulation();
+                }
+
+                GUILayout.Space(4);
+
+                // Reset
+                if (DrawButton("↺ RESET", Orange, 28))
+                {
+                    simulation.ResetSimulation();
+                }
+
+                EditorGUILayout.EndHorizontal();
+
+                GUILayout.Space(4);
+
+                // Status indicator
+                Rect statusRect = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.Height(20));
+                Color statusColor = simulation.IsSimulationRunning ? Green : TextGray;
+                string statusText = simulation.IsSimulationRunning ? "● RUNNING" : "○ STOPPED";
+                
+                var statusStyle = new GUIStyle(EditorStyles.boldLabel)
+                {
+                    fontSize = 10,
+                    alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = statusColor }
+                };
+                EditorGUI.LabelField(statusRect, statusText, statusStyle);
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // STATUS PANEL - Tank Level
+        // ═══════════════════════════════════════════════════════════
+        private void DrawStatusPanel()
+        {
+            DrawPanel("TANK STATUS", () =>
+            {
+                // Capacity
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Capacity", labelStyle, GUILayout.Width(70));
+                simulation.tankCapacity = EditorGUILayout.FloatField(simulation.tankCapacity, GUILayout.Width(60));
+                EditorGUILayout.LabelField("L", smallLabelStyle, GUILayout.Width(20));
+                EditorGUILayout.EndHorizontal();
+
+                GUILayout.Space(8);
+
+                // Water Level Visual
+                float fillPercent = simulation.WaterLevelPercentage / 100f;
+                DrawProgressBar(
+                    $"{simulation.CurrentWaterLevel:F1} L ({simulation.WaterLevelPercentage:F1}%)",
+                    fillPercent,
+                    GetWaterColor(simulation.WaterLevelPercentage),
+                    35
+                );
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // VALVES PANEL
+        // ═══════════════════════════════════════════════════════════
+        private void DrawValvesPanel()
+        {
+            DrawPanel("VALVES", () =>
+            {
+                // Inlet
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Inlet", labelStyle, GUILayout.Width(50));
+                
+                Color inletColor = simulation.inletValveOpen ? Green : Red;
+                string inletText = simulation.inletValveOpen ? "OPEN" : "CLOSED";
+                if (DrawButton(inletText, inletColor, 24, 80))
+                    simulation.ToggleInletValve();
+
+                GUILayout.Space(8);
+                simulation.inletFlowRate = EditorGUILayout.Slider(simulation.inletFlowRate, 0.1f, 100f);
+                EditorGUILayout.LabelField("L/s", smallLabelStyle, GUILayout.Width(25));
+                EditorGUILayout.EndHorizontal();
+
+                GUILayout.Space(4);
+
+                // Outlet
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Outlet", labelStyle, GUILayout.Width(50));
+                
+                Color outletColor = simulation.outletValveOpen ? Green : Red;
+                string outletText = simulation.outletValveOpen ? "OPEN" : "CLOSED";
+                if (DrawButton(outletText, outletColor, 24, 80))
+                    simulation.ToggleOutletValve();
+
+                GUILayout.Space(8);
+                simulation.outletFlowRate = EditorGUILayout.Slider(simulation.outletFlowRate, 0.1f, 100f);
+                EditorGUILayout.LabelField("L/s", smallLabelStyle, GUILayout.Width(25));
+                EditorGUILayout.EndHorizontal();
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // GAUGES PANEL - Temperature & Pressure
+        // ═══════════════════════════════════════════════════════════
+        private void DrawGaugesPanel()
+        {
+            DrawPanel("GAUGES", () =>
+            {
+                // Temperature
+                float tempPercent = Mathf.Clamp01(simulation.CurrentTemperature / 340f);
+                DrawProgressBar(
+                    $"TEMP: {simulation.CurrentTemperature:F1} °C",
+                    tempPercent,
+                    GetTempColor(simulation.CurrentTemperature),
+                    24
+                );
+
+                GUILayout.Space(6);
+
+                // Pressure
+                float pressPercent = Mathf.Clamp01(simulation.CurrentPressure / 10f);
+                DrawProgressBar(
+                    $"PRESS: {simulation.CurrentPressure:F2} bar",
+                    pressPercent,
+                    simulation.CurrentPressure >= simulation.overPressureThreshold ? Red : Blue,
+                    24
+                );
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // SETTINGS PANEL
+        // ═══════════════════════════════════════════════════════════
+        private void DrawSettingsPanel()
+        {
+            DrawPanel("THERMAL SETTINGS", () =>
+            {
+                // Scenario
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Mode", labelStyle, GUILayout.Width(80));
+                simulation.scenario = (SimulationScenario)EditorGUILayout.EnumPopup(simulation.scenario);
+                EditorGUILayout.EndHorizontal();
+
+                GUILayout.Space(4);
+
+                // Ambient
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("Ambient", labelStyle, GUILayout.Width(80));
+                simulation.ambientTemperature = EditorGUILayout.Slider(simulation.ambientTemperature, -20f, 50f);
+                EditorGUILayout.LabelField("°C", smallLabelStyle, GUILayout.Width(20));
+                EditorGUILayout.EndHorizontal();
+
+                if (simulation.scenario == SimulationScenario.HotWaterInlet_CoolingInTank)
+                {
+                    // Inlet temp
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField("Inlet Temp", labelStyle, GUILayout.Width(80));
+                    simulation.inletWaterTemperature = EditorGUILayout.Slider(simulation.inletWaterTemperature, 50f, 340f);
+                    EditorGUILayout.LabelField("°C", smallLabelStyle, GUILayout.Width(20));
+                    EditorGUILayout.EndHorizontal();
+
+                    // Cooling
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField("Cooling", labelStyle, GUILayout.Width(80));
+                    simulation.coolingRate = EditorGUILayout.Slider(simulation.coolingRate, 0.1f, 50f);
+                    EditorGUILayout.LabelField("°C/s", smallLabelStyle, GUILayout.Width(30));
+                    EditorGUILayout.EndHorizontal();
+                }
                 else
-                    simulation.StartSimulation();
-            }
+                {
+                    // Heating
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField("Heating", labelStyle, GUILayout.Width(80));
+                    simulation.heatingRate = EditorGUILayout.Slider(simulation.heatingRate, 0.1f, 50f);
+                    EditorGUILayout.LabelField("°C/s", smallLabelStyle, GUILayout.Width(30));
+                    EditorGUILayout.EndHorizontal();
+                }
+            });
+        }
 
-            // Reset Button
-            GUI.backgroundColor = AccentOrange;
-            if (GUILayout.Button("RESET", buttonStyle, GUILayout.Width(120)))
+        // ═══════════════════════════════════════════════════════════
+        // WARNINGS PANEL
+        // ═══════════════════════════════════════════════════════════
+        private void DrawWarningsPanel()
+        {
+            DrawPanel("ALERTS", () =>
             {
-                simulation.ResetSimulation();
-            }
+                TankWarnings warnings = simulation.ActiveWarnings;
 
-            GUI.backgroundColor = Color.white;
-
-            EditorGUILayout.EndHorizontal();
-
-            // Status indicator
-            EditorGUILayout.Space(5);
-            string statusText = simulation.IsSimulationRunning ? "● RUNNING" : "○ STOPPED";
-            Color statusColor = simulation.IsSimulationRunning ? AccentGreen : Color.gray;
-            var statusStyle = new GUIStyle(EditorStyles.boldLabel) { normal = { textColor = statusColor } };
-            EditorGUILayout.LabelField(statusText, statusStyle);
-
-            EditorGUILayout.EndVertical();
+                if (warnings == TankWarnings.None)
+                {
+                    DrawAlertBox("✓ ALL SYSTEMS NORMAL", Green);
+                }
+                else
+                {
+                    if ((warnings & TankWarnings.Overheat) != 0)
+                        DrawAlertBox("⚠ OVERHEAT", Red);
+                    if ((warnings & TankWarnings.Overflow) != 0)
+                        DrawAlertBox("⚠ OVERFLOW", Yellow);
+                    if ((warnings & TankWarnings.EmptyTank) != 0)
+                        DrawAlertBox("⚠ EMPTY", Yellow);
+                    if ((warnings & TankWarnings.OverPressure) != 0)
+                        DrawAlertBox("⚠ HIGH PRESSURE", Red);
+                }
+            });
         }
 
-        // ─── SCENARIO SELECTION ─────────────────────────────────────
+        // ═══════════════════════════════════════════════════════════
+        // UI HELPERS
+        // ═══════════════════════════════════════════════════════════
 
-        private void DrawScenarioSelection()
+        private void DrawPanel(string title, System.Action content)
         {
-            EditorGUILayout.BeginVertical(panelStyle);
-            EditorGUILayout.LabelField("SCENARIO", subHeaderStyle);
-            EditorGUILayout.Space(5);
-
-            simulation.scenario = (SimulationScenario)EditorGUILayout.EnumPopup("Mode", simulation.scenario);
-
-            string description = simulation.scenario == SimulationScenario.HotWaterInlet_CoolingInTank
-                ? "Hot water flows in → Cools down in tank over time"
-                : "Cold water flows in → Heated inside the tank";
-            EditorGUILayout.HelpBox(description, MessageType.Info);
-
-            EditorGUILayout.EndVertical();
-        }
-
-        // ─── VALVE CONTROLS ─────────────────────────────────────────
-
-        private void DrawValveControls()
-        {
-            EditorGUILayout.BeginVertical(panelStyle);
-            EditorGUILayout.LabelField("VALVES", subHeaderStyle);
-            EditorGUILayout.Space(5);
-
-            // Inlet Valve
+            Rect panelRect = EditorGUILayout.BeginVertical();
+            
+            // Panel background
+            Rect bgRect = new Rect(8, panelRect.y, position.width - 16, 0);
+            
+            GUILayout.Space(4);
+            
+            // Title
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Inlet Valve:", GUILayout.Width(100));
-            GUI.backgroundColor = simulation.inletValveOpen ? AccentGreen : AccentRed;
-            string inletText = simulation.inletValveOpen ? "OPEN" : "CLOSED";
-            if (GUILayout.Button(inletText, buttonStyle))
-            {
-                simulation.ToggleInletValve();
-            }
-            GUI.backgroundColor = Color.white;
+            GUILayout.Space(12);
+            EditorGUILayout.LabelField(title, titleStyle);
             EditorGUILayout.EndHorizontal();
+            
+            GUILayout.Space(4);
 
-            EditorGUILayout.Space(3);
-
-            // Outlet Valve
+            // Content
             EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Outlet Valve:", GUILayout.Width(100));
-            GUI.backgroundColor = simulation.outletValveOpen ? AccentGreen : AccentRed;
-            string outletText = simulation.outletValveOpen ? "OPEN" : "CLOSED";
-            if (GUILayout.Button(outletText, buttonStyle))
-            {
-                simulation.ToggleOutletValve();
-            }
-            GUI.backgroundColor = Color.white;
+            GUILayout.Space(12);
+            EditorGUILayout.BeginVertical();
+            content?.Invoke();
+            EditorGUILayout.EndVertical();
+            GUILayout.Space(12);
             EditorGUILayout.EndHorizontal();
 
+            GUILayout.Space(8);
+            
             EditorGUILayout.EndVertical();
+
+            // Draw background after measuring
+            bgRect.height = GUILayoutUtility.GetLastRect().yMax - bgRect.y + 4;
+            EditorGUI.DrawRect(bgRect, BgPanel);
+            DrawBorder(bgRect, BorderColor, 1);
         }
 
-        // ─── FLOW RATES ─────────────────────────────────────────────
-
-        private void DrawFlowRates()
+        private bool DrawButton(string text, Color color, float height, float width = 0)
         {
-            EditorGUILayout.BeginVertical(panelStyle);
-            EditorGUILayout.LabelField("FLOW RATES", subHeaderStyle);
-            EditorGUILayout.Space(5);
+            GUI.backgroundColor = color;
+            
+            var style = new GUIStyle(GUI.skin.button)
+            {
+                fontSize = 10,
+                fontStyle = FontStyle.Bold,
+                fixedHeight = height,
+                normal = { textColor = Color.white },
+                hover = { textColor = Color.white },
+                active = { textColor = Color.white }
+            };
 
-            simulation.inletFlowRate = EditorGUILayout.Slider("Inlet (L/s)", simulation.inletFlowRate, 0.1f, 100f);
-            simulation.outletFlowRate = EditorGUILayout.Slider("Outlet (L/s)", simulation.outletFlowRate, 0.1f, 100f);
+            bool result;
+            if (width > 0)
+                result = GUILayout.Button(text, style, GUILayout.Width(width));
+            else
+                result = GUILayout.Button(text, style);
 
-            EditorGUILayout.EndVertical();
+            GUI.backgroundColor = Color.white;
+            return result;
         }
 
-        // ─── TANK STATUS ────────────────────────────────────────────
-
-        private void DrawTankStatus()
+        private void DrawProgressBar(string label, float value, Color fillColor, float height)
         {
-            EditorGUILayout.BeginVertical(panelStyle);
-            EditorGUILayout.LabelField("TANK STATUS", subHeaderStyle);
-            EditorGUILayout.Space(5);
+            Rect rect = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.Height(height));
+            rect.x += 4;
+            rect.width -= 8;
 
-            // Tank capacity setting
-            simulation.tankCapacity = EditorGUILayout.FloatField("Tank Capacity (L)", simulation.tankCapacity);
+            // Background
+            EditorGUI.DrawRect(rect, BgLight);
 
-            EditorGUILayout.Space(5);
-
-            // Water Level Bar
-            float levelPercent = simulation.WaterLevelPercentage / 100f;
-            EditorGUILayout.LabelField($"Water Level: {simulation.CurrentWaterLevel:F1} L / {simulation.tankCapacity:F0} L ({simulation.WaterLevelPercentage:F1}%)");
-
-            Rect levelRect = GUILayoutUtility.GetRect(GUIContent.none, GUI.skin.box, GUILayout.Height(30));
-            EditorGUI.DrawRect(levelRect, EmptyColor);
-
-            Rect fillRect = new Rect(levelRect.x, levelRect.y, levelRect.width * levelPercent, levelRect.height);
-            Color levelColor = GetLevelColor(simulation.WaterLevelPercentage);
-            EditorGUI.DrawRect(fillRect, levelColor);
+            // Fill
+            Rect fillRect = new Rect(rect.x + 2, rect.y + 2, (rect.width - 4) * Mathf.Clamp01(value), rect.height - 4);
+            EditorGUI.DrawRect(fillRect, fillColor);
 
             // Border
-            DrawRectBorder(levelRect, new Color(0.4f, 0.4f, 0.5f, 1f), 2);
+            DrawBorder(rect, BorderColor, 1);
 
-            // Level text overlay
-            var centerStyle = new GUIStyle(EditorStyles.boldLabel)
+            // Label
+            var labelStyle = new GUIStyle(EditorStyles.boldLabel)
             {
+                fontSize = 10,
                 alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = Color.white }
+                normal = { textColor = TextWhite }
             };
-            EditorGUI.LabelField(levelRect, $"{simulation.WaterLevelPercentage:F1}%", centerStyle);
-
-            EditorGUILayout.EndVertical();
+            EditorGUI.DropShadowLabel(rect, label, labelStyle);
         }
 
-        // ─── TEMPERATURE GAUGE ──────────────────────────────────────
-
-        private void DrawTemperatureGauge()
+        private void DrawAlertBox(string message, Color color)
         {
-            EditorGUILayout.BeginVertical(panelStyle);
-            EditorGUILayout.LabelField("TEMPERATURE", subHeaderStyle);
-            EditorGUILayout.Space(5);
+            Rect rect = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.Height(22));
+            rect.x += 4;
+            rect.width -= 8;
 
-            float tempPercent = Mathf.Clamp01(simulation.CurrentTemperature / 340f);
+            // Background
+            Color bgColor = new Color(color.r, color.g, color.b, 0.15f);
+            EditorGUI.DrawRect(rect, bgColor);
+            DrawBorder(rect, color, 1);
 
-            EditorGUILayout.LabelField($"Current Temperature: {simulation.CurrentTemperature:F1} °C");
-
-            Rect tempRect = GUILayoutUtility.GetRect(GUIContent.none, GUI.skin.box, GUILayout.Height(25));
-            EditorGUI.DrawRect(tempRect, EmptyColor);
-
-            // Temperature gradient bar
-            Rect tempFillRect = new Rect(tempRect.x, tempRect.y, tempRect.width * tempPercent, tempRect.height);
-            Color tempColor = GetTemperatureColor(simulation.CurrentTemperature);
-            EditorGUI.DrawRect(tempFillRect, tempColor);
-            DrawRectBorder(tempRect, new Color(0.4f, 0.4f, 0.5f, 1f), 2);
-
-            var centerStyle = new GUIStyle(EditorStyles.boldLabel)
+            // Text
+            var style = new GUIStyle(EditorStyles.boldLabel)
             {
+                fontSize = 10,
                 alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = Color.white }
+                normal = { textColor = color }
             };
-            EditorGUI.LabelField(tempRect, $"{simulation.CurrentTemperature:F1} °C", centerStyle);
-
-            // Gauge visualization (semicircle representation)
-            EditorGUILayout.Space(5);
-            DrawTemperatureNeedle(simulation.CurrentTemperature);
-
-            EditorGUILayout.EndVertical();
+            EditorGUI.LabelField(rect, message, style);
         }
 
-        private void DrawTemperatureNeedle(float temperature)
+        private void DrawBorder(Rect rect, Color color, float thickness)
         {
-            Rect gaugeRect = GUILayoutUtility.GetRect(GUIContent.none, GUI.skin.box, GUILayout.Height(100));
-            EditorGUI.DrawRect(gaugeRect, new Color(0.1f, 0.1f, 0.12f, 1f));
-
-            // Draw gauge background arc markings
-            Vector2 center = new Vector2(gaugeRect.center.x, gaugeRect.yMax - 10);
-            float radius = 40f;
-
-            // Draw scale markings
-            Handles.color = new Color(0.3f, 0.8f, 0.9f, 0.8f);
-            for (int i = 0; i <= 340; i += 20)
-            {
-                float angle = Mathf.Lerp(180f, 0f, i / 340f) * Mathf.Deg2Rad;
-                Vector3 start = center + new Vector2(Mathf.Cos(angle), -Mathf.Sin(angle)) * (radius - 5);
-                Vector3 end = center + new Vector2(Mathf.Cos(angle), -Mathf.Sin(angle)) * radius;
-                Handles.DrawLine(start, end);
-            }
-
-            // Draw needle
-            float needleAngle = Mathf.Lerp(180f, 0f, temperature / 340f) * Mathf.Deg2Rad;
-            Vector3 needleEnd = center + new Vector2(Mathf.Cos(needleAngle), -Mathf.Sin(needleAngle)) * (radius - 10);
-            Handles.color = Color.white;
-            Handles.DrawLine((Vector3)center, needleEnd);
-
-            // Draw center dot
-            Handles.color = AccentRed;
-            Handles.DrawSolidDisc(center, Vector3.forward, 3f);
-
-            // Labels
-            var labelStyle = new GUIStyle(EditorStyles.miniLabel) { normal = { textColor = Color.gray } };
-            EditorGUI.LabelField(new Rect(gaugeRect.x + 10, gaugeRect.yMax - 20, 30, 15), "0°", labelStyle);
-            EditorGUI.LabelField(new Rect(gaugeRect.center.x - 15, gaugeRect.y + 5, 40, 15), "170°", labelStyle);
-            EditorGUI.LabelField(new Rect(gaugeRect.xMax - 40, gaugeRect.yMax - 20, 40, 15), "340°", labelStyle);
-
-            DrawRectBorder(gaugeRect, new Color(0.3f, 0.3f, 0.4f, 1f), 1);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, thickness), color);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), color);
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y, thickness, rect.height), color);
+            EditorGUI.DrawRect(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), color);
         }
 
-        // ─── PRESSURE GAUGE ─────────────────────────────────────────
-
-        private void DrawPressureGauge()
+        private Color GetWaterColor(float percent)
         {
-            EditorGUILayout.BeginVertical(panelStyle);
-            EditorGUILayout.LabelField("PRESSURE", subHeaderStyle);
-            EditorGUILayout.Space(5);
-
-            float pressurePercent = Mathf.Clamp01(simulation.CurrentPressure / simulation.overPressureThreshold);
-
-            EditorGUILayout.LabelField($"Current Pressure: {simulation.CurrentPressure:F2} bar");
-
-            Rect pressRect = GUILayoutUtility.GetRect(GUIContent.none, GUI.skin.box, GUILayout.Height(25));
-            EditorGUI.DrawRect(pressRect, EmptyColor);
-
-            Rect pressFillRect = new Rect(pressRect.x, pressRect.y, pressRect.width * pressurePercent, pressRect.height);
-            Color pressColor = simulation.CurrentPressure >= simulation.overPressureThreshold ? AccentRed : AccentBlue;
-            EditorGUI.DrawRect(pressFillRect, pressColor);
-            DrawRectBorder(pressRect, new Color(0.4f, 0.4f, 0.5f, 1f), 2);
-
-            var centerStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = Color.white }
-            };
-            EditorGUI.LabelField(pressRect, $"{simulation.CurrentPressure:F2} bar", centerStyle);
-
-            EditorGUILayout.Space(3);
-            simulation.basePressure = EditorGUILayout.Slider("Base Pressure (bar)", simulation.basePressure, 0.5f, 2f);
-
-            EditorGUILayout.EndVertical();
+            if (percent >= 95f) return Red;
+            if (percent >= 75f) return Yellow;
+            return Blue;
         }
 
-        // ─── THERMAL CONTROL ────────────────────────────────────────
-
-        private void DrawThermalControl()
+        private Color GetTempColor(float temp)
         {
-            EditorGUILayout.BeginVertical(panelStyle);
-            EditorGUILayout.LabelField("THERMAL CONTROL", subHeaderStyle);
-            EditorGUILayout.Space(5);
-
-            simulation.ambientTemperature = EditorGUILayout.Slider("Ambient Temp (°C)", simulation.ambientTemperature, -20f, 50f);
-
-            if (simulation.scenario == SimulationScenario.HotWaterInlet_CoolingInTank)
-            {
-                simulation.inletWaterTemperature = EditorGUILayout.Slider("Inlet Water Temp (°C)", simulation.inletWaterTemperature, 50f, 340f);
-                simulation.coolingRate = EditorGUILayout.Slider("Cooling Rate (°C/s)", simulation.coolingRate, 0.1f, 50f);
-            }
-            else
-            {
-                simulation.heatingRate = EditorGUILayout.Slider("Heating Rate (°C/s)", simulation.heatingRate, 0.1f, 50f);
-            }
-
-            EditorGUILayout.EndVertical();
-        }
-
-        // ─── WARNINGS ───────────────────────────────────────────────
-
-        private void DrawWarnings()
-        {
-            EditorGUILayout.BeginVertical(panelStyle);
-            EditorGUILayout.LabelField("WARNINGS", subHeaderStyle);
-            EditorGUILayout.Space(5);
-
-            TankWarnings warnings = simulation.ActiveWarnings;
-
-            if (warnings == TankWarnings.None)
-            {
-                var safeStyle = new GUIStyle(EditorStyles.boldLabel) { normal = { textColor = AccentGreen } };
-                EditorGUILayout.LabelField("ALL SYSTEMS NORMAL", safeStyle);
-            }
-            else
-            {
-                if ((warnings & TankWarnings.Overheat) != 0)
-                {
-                    DrawWarningBox($"OVERHEAT! Temperature > {simulation.overheatThreshold}°C", AccentRed);
-                }
-                if ((warnings & TankWarnings.Overflow) != 0)
-                {
-                    DrawWarningBox($"OVERFLOW! Tank level > {simulation.overflowThreshold}%", AccentYellow);
-                }
-                if ((warnings & TankWarnings.EmptyTank) != 0)
-                {
-                    DrawWarningBox($"EMPTY TANK! Level < {simulation.emptyThreshold}%", AccentYellow);
-                }
-                if ((warnings & TankWarnings.OverPressure) != 0)
-                {
-                    DrawWarningBox($"OVER PRESSURE! > {simulation.overPressureThreshold} bar", AccentRed);
-                }
-            }
-
-            EditorGUILayout.Space(5);
-            EditorGUILayout.LabelField("Warning Thresholds", EditorStyles.miniBoldLabel);
-            simulation.overheatThreshold = EditorGUILayout.Slider("Overheat (°C)", simulation.overheatThreshold, 100f, 340f);
-            simulation.overflowThreshold = EditorGUILayout.Slider("Overflow (%)", simulation.overflowThreshold, 80f, 100f);
-            simulation.emptyThreshold = EditorGUILayout.Slider("Empty (%)", simulation.emptyThreshold, 0f, 20f);
-            simulation.overPressureThreshold = EditorGUILayout.Slider("Over Pressure (bar)", simulation.overPressureThreshold, 2f, 20f);
-
-            EditorGUILayout.EndVertical();
-        }
-
-        private void DrawWarningBox(string message, Color color)
-        {
-            Rect warnRect = GUILayoutUtility.GetRect(GUIContent.none, GUI.skin.box, GUILayout.Height(25));
-            EditorGUI.DrawRect(warnRect, new Color(color.r, color.g, color.b, 0.2f));
-            DrawRectBorder(warnRect, color, 2);
-
-            var warnTextStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = color },
-                fontSize = 11
-            };
-            EditorGUI.LabelField(warnRect, $"⚠ {message}", warnTextStyle);
-        }
-
-        // ─── UTILITIES ──────────────────────────────────────────────
-
-        private Color GetLevelColor(float percentage)
-        {
-            if (percentage >= 95f) return AccentRed;
-            if (percentage >= 75f) return AccentYellow;
-            if (percentage >= 25f) return WaterColor;
-            return new Color(0.2f, 0.4f, 0.7f, 0.8f);
-        }
-
-        private Color GetTemperatureColor(float temp)
-        {
-            if (temp <= 50f) return AccentBlue;
-            if (temp <= 150f) return AccentGreen;
-            if (temp <= 250f) return AccentOrange;
-            return AccentRed;
-        }
-
-        private void DrawRectBorder(Rect rect, Color color, float thickness)
-        {
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, thickness), color); // Top
-            EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - thickness, rect.width, thickness), color); // Bottom
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, thickness, rect.height), color); // Left
-            EditorGUI.DrawRect(new Rect(rect.xMax - thickness, rect.y, thickness, rect.height), color); // Right
+            if (temp >= 250f) return Red;
+            if (temp >= 150f) return Orange;
+            if (temp >= 50f) return Yellow;
+            return Cyan;
         }
     }
 }
